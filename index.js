@@ -44,7 +44,6 @@ let mainMenuChannelId = null;
 // ============ PAYOS API V2 (PRODUCTION) ============
 const PAYOS_API_URL = 'https://api-merchant.payos.vn';
 
-// Hàm gọi API PayOS V2
 async function callPayOSAPI(endpoint, method, data = null, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -65,6 +64,10 @@ async function callPayOSAPI(endpoint, method, data = null, retries = 3) {
       }
       
       const response = await axios(config);
+      
+      // Log response để debug
+      console.log(`✅ PayOS API ${endpoint} success:`, response.data?.code);
+      
       return response.data;
       
     } catch (error) {
@@ -90,19 +93,40 @@ async function createPaymentLink(orderCode, amount, description, userId, usernam
     cancelUrl: `https://discord.com/users/${userId}`,
     buyerName: username,
     buyerEmail: `${userId}@discord.user`,
-    expiredAt: Math.floor(Date.now() / 1000) + 900 // 15 phút
+    expiredAt: Math.floor(Date.now() / 1000) + 900
   };
   
+  console.log(`📤 Creating payment link:`, { orderCode, amount, description });
+  
   const response = await callPayOSAPI('/v2/payment-requests', 'POST', paymentData);
-  return response.data;
+  
+  // Kiểm tra response structure của V2
+  if (!response || response.code !== '00') {
+    throw new Error(response?.desc || 'PayOS API error');
+  }
+  
+  // Response V2 trả về data trong response.data
+  const paymentLinkData = response.data;
+  
+  if (!paymentLinkData || !paymentLinkData.checkoutUrl) {
+    console.error('Invalid response:', JSON.stringify(response, null, 2));
+    throw new Error('Invalid response from PayOS');
+  }
+  
+  return paymentLinkData;
 }
 
 // Kiểm tra trạng thái thanh toán - API V2
 async function checkPaymentStatus(orderCode) {
   try {
     const response = await callPayOSAPI(`/v2/payment-requests/${orderCode}`, 'GET');
-    return response.data;
+    
+    if (response && response.code === '00' && response.data) {
+      return response.data;
+    }
+    return null;
   } catch (error) {
+    console.log(`Check payment ${orderCode} error:`, error.message);
     return null;
   }
 }
@@ -135,16 +159,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 client.once('ready', async () => {
   console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
-  console.log(`🔗 PayOS API: ${PAYOS_API_URL}`);
-  
-  // Test kết nối PayOS V2
-  console.log('🔍 Testing PayOS V2 connection...');
-  try {
-    await callPayOSAPI('/v2/payment-requests', 'GET');
-    console.log('✅ PayOS V2 connected!');
-  } catch (error) {
-    console.log('⚠️ PayOS V2 connection failed, will retry on each request');
-  }
+  console.log(`🔗 PayOS API V2: ${PAYOS_API_URL}`);
   
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands.map(cmd => cmd.toJSON()) });
@@ -245,7 +260,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isCommand()) {
     if (interaction.commandName === 'start') {
       if (!ADMIN_IDS.includes(interaction.user.id)) {
-        return interaction.reply({ content: '❌ Bạn không có quyền!', flags: 64 });
+        return interaction.reply({ content: '❌ Bạn không có quyền!', ephemeral: true });
       }
       const stats = await db.getAllProductsByType();
       const embed = new EmbedBuilder()
@@ -261,22 +276,22 @@ client.on('interactionCreate', async interaction => {
     }
     
     if (interaction.commandName === 'addclone') {
-      if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Không có quyền!', flags: 64 });
+      if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Không có quyền!', ephemeral: true });
       const type = interaction.options.getString('type');
       const email = interaction.options.getString('email');
       const password = interaction.options.getString('password');
       await db.addClone(type, email, password);
-      await interaction.reply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!`, flags: 64 });
+      await interaction.reply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!`, ephemeral: true });
       await updateMainMenu();
       return;
     }
     
     if (interaction.commandName === 'addmoney') {
-      if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Không có quyền!', flags: 64 });
+      if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Không có quyền!', ephemeral: true });
       const targetUser = interaction.options.getUser('user');
       const amount = interaction.options.getInteger('amount');
       await db.addBalance(targetUser.id, amount, null);
-      await interaction.reply({ content: `✅ Đã cộng **${amount.toLocaleString()} VND** cho ${targetUser.username}!`, flags: 64 });
+      await interaction.reply({ content: `✅ Đã cộng **${amount.toLocaleString()} VND** cho ${targetUser.username}!`, ephemeral: true });
       const user = await client.users.fetch(targetUser.id);
       const embed = new EmbedBuilder()
         .setColor(0x00FF00)
@@ -296,14 +311,14 @@ client.on('interactionCreate', async interaction => {
       let amount = parseInt(amountStr.replace(/[^0-9]/g, ''));
       
       if (isNaN(amount) || amount < 5000) {
-        return interaction.reply({ content: '⚠️ Số tiền không hợp lệ! Tối thiểu **5,000 VND**.', flags: 64 });
+        return interaction.reply({ content: '⚠️ Số tiền không hợp lệ! Tối thiểu **5,000 VND**.', ephemeral: true });
       }
       
       if (amount > 5000000) {
-        return interaction.reply({ content: '⚠️ Số tiền tối đa là **5,000,000 VND**!', flags: 64 });
+        return interaction.reply({ content: '⚠️ Số tiền tối đa là **5,000,000 VND**!', ephemeral: true });
       }
       
-      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, flags: 64 });
+      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, ephemeral: true });
       
       try {
         const orderCode = Number(Date.now());
@@ -326,13 +341,13 @@ client.on('interactionCreate', async interaction => {
           .setFooter({ text: 'Sau khi chuyển khoản, bot sẽ tự cộng tiền sau 15-30 giây' })
           .setTimestamp();
         
-        await interaction.editReply({ content: null, embeds: [embed], flags: 64 });
+        await interaction.editReply({ content: null, embeds: [embed] });
         
       } catch (error) {
         console.error('Nap error:', error);
         await interaction.editReply({ 
-          content: `❌ Lỗi tạo link thanh toán!\nLỗi: ${error.response?.data?.desc || error.message}\n\n💡 Vui lòng thử lại sau hoặc liên hệ Admin để nạp thủ công.`,
-          flags: 64 
+          content: `❌ Lỗi tạo link thanh toán!\nLỗi: ${error.message}\n\n💡 Vui lòng thử lại sau hoặc liên hệ Admin để nạp thủ công.`,
+          ephemeral: true 
         });
       }
       return;
@@ -350,7 +365,7 @@ client.on('interactionCreate', async interaction => {
         .setDescription('Chọn số tiền muốn nạp (tối thiểu **5,000đ**):\n\n• Bấm nút có sẵn\n• Hoặc bấm **NHẬP SỐ TIỀN** để nhập tùy chỉnh')
         .setTimestamp();
       
-      await interaction.update({ embeds: [embed], components: createNapMenu().components, flags: 64 });
+      await interaction.update({ embeds: [embed], components: createNapMenu().components, ephemeral: true });
       return;
     }
     
@@ -379,7 +394,7 @@ client.on('interactionCreate', async interaction => {
         .setDescription(`📦 **Tồn kho:**\n• Level 5: **${stats.lv5 || 0}**\n• KC 7 ngày: **${stats.kc7d || 0}**\n• KC Vĩnh viễn: **${stats.kcvv || 0}**\n\n⬇️ **Chọn sản phẩm:**`)
         .setTimestamp();
       
-      await interaction.update({ embeds: [embed], components: createMainMenu().components, flags: 64 });
+      await interaction.update({ embeds: [embed], components: createMainMenu().components, ephemeral: true });
       return;
     }
     
@@ -390,7 +405,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('💰 SỐ DƯ TÀI KHOẢN')
         .setDescription(`**${balance.toLocaleString()} VND**`)
         .setTimestamp();
-      await interaction.reply({ embeds: [embed], flags: 64 });
+      await interaction.reply({ embeds: [embed], ephemeral: true });
       return;
     }
     
@@ -400,19 +415,19 @@ client.on('interactionCreate', async interaction => {
         .setTitle('📖 HƯỚNG DẪN')
         .setDescription('**Cách mua hàng:**\n1️⃣ Nhấn nút sản phẩm\n2️⃣ Xác nhận\n3️⃣ Nhận thông tin qua DM\n\n**Cách nạp tiền:**\n1️⃣ Nhấn nút NẠP TIỀN\n2️⃣ Chọn số tiền\n3️⃣ Quét QR chuyển khoản\n4️⃣ Đợi 15-30 giây cộng tiền')
         .setTimestamp();
-      await interaction.reply({ embeds: [embed], flags: 64 });
+      await interaction.reply({ embeds: [embed], ephemeral: true });
       return;
     }
     
     // Nạp tiền có sẵn
-    if (interaction.customId.startsWith('nap_') && !interaction.customId.includes('custom') && !interaction.customId.includes('menu')) {
+    if (interaction.customId.startsWith('nap_') && !interaction.customId.includes('custom') && !interaction.customId.includes('menu') && !interaction.customId.includes('back')) {
       const amount = parseInt(interaction.customId.split('_')[1]);
       
       if (amount < 5000) {
-        return interaction.reply({ content: '⚠️ Số tiền nạp tối thiểu là **5,000 VND**!', flags: 64 });
+        return interaction.reply({ content: '⚠️ Số tiền nạp tối thiểu là **5,000 VND**!', ephemeral: true });
       }
       
-      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, flags: 64 });
+      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, ephemeral: true });
       
       try {
         const orderCode = Number(Date.now());
@@ -435,13 +450,13 @@ client.on('interactionCreate', async interaction => {
           .setFooter({ text: 'Sau khi chuyển khoản, bot sẽ tự cộng tiền sau 15-30 giây' })
           .setTimestamp();
         
-        await interaction.editReply({ content: null, embeds: [embed], flags: 64 });
+        await interaction.editReply({ content: null, embeds: [embed] });
         
       } catch (error) {
         console.error('Nap error:', error);
         await interaction.editReply({ 
-          content: `❌ Lỗi tạo link thanh toán!\nLỗi: ${error.response?.data?.desc || error.message}\n\n💡 Vui lòng thử lại sau hoặc liên hệ Admin để nạp thủ công.`,
-          flags: 64 
+          content: `❌ Lỗi tạo link thanh toán!\nLỗi: ${error.message}\n\n💡 Vui lòng thử lại sau hoặc liên hệ Admin để nạp thủ công.`,
+          ephemeral: true 
         });
       }
       return;
@@ -458,13 +473,13 @@ client.on('interactionCreate', async interaction => {
       if (balance < price) {
         return interaction.reply({ 
           content: `⚠️ Bạn không đủ tiền! Cần **${price.toLocaleString()} VND**, bạn có **${balance.toLocaleString()} VND**\n\n💰 Hãy nạp tiền bằng nút **NẠP TIỀN** bên trên!`, 
-          flags: 64 
+          ephemeral: true 
         });
       }
       
       const clone = await db.getAvailableClone(productType);
       if (!clone) {
-        return interaction.reply({ content: '❌ Sản phẩm này đã hết hàng!', flags: 64 });
+        return interaction.reply({ content: '❌ Sản phẩm này đã hết hàng!', ephemeral: true });
       }
       
       const result = await db.deductBalance(userId, price, clone.id, productType);
@@ -486,10 +501,10 @@ client.on('interactionCreate', async interaction => {
           .setTimestamp();
         
         await user.send({ embeds: [embed] }).catch(() => null);
-        await interaction.reply({ content: `✅ Mua **${productName}** thành công! Đã gửi qua DM.`, flags: 64 });
+        await interaction.reply({ content: `✅ Mua **${productName}** thành công! Đã gửi qua DM.`, ephemeral: true });
         await updateMainMenu();
       } else {
-        await interaction.reply({ content: '❌ Giao dịch thất bại!', flags: 64 });
+        await interaction.reply({ content: '❌ Giao dịch thất bại!', ephemeral: true });
       }
       return;
     }
