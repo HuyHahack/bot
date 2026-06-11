@@ -41,13 +41,16 @@ const pendingPayments = new Map();
 let mainMenuMessageId = null;
 let mainMenuChannelId = null;
 
-// Hàm gọi API PayOS - ĐƠN GIẢN, KHÔNG IP FALLBACK
-async function callPayOSAPI(url, method, data = null, retries = 3) {
+// ============ PAYOS API V2 (PRODUCTION) ============
+const PAYOS_API_URL = 'https://api-merchant.payos.vn';
+
+// Hàm gọi API PayOS V2
+async function callPayOSAPI(endpoint, method, data = null, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
       const config = {
         method: method,
-        url: url,
+        url: `${PAYOS_API_URL}${endpoint}`,
         timeout: 20000,
         headers: {
           'x-client-id': process.env.PAYOS_CLIENT_ID,
@@ -67,11 +70,40 @@ async function callPayOSAPI(url, method, data = null, retries = 3) {
     } catch (error) {
       console.log(`⚠️ PayOS API call attempt ${i + 1} failed: ${error.message}`);
       
-      if (i === retries - 1) throw error;
+      if (error.response?.data) {
+        console.log(`   Error detail: ${JSON.stringify(error.response.data)}`);
+      }
       
-      // Chờ trước khi retry
+      if (i === retries - 1) throw error;
       await new Promise(r => setTimeout(r, 2000 * (i + 1)));
     }
+  }
+}
+
+// Tạo payment link - API V2
+async function createPaymentLink(orderCode, amount, description, userId, username) {
+  const paymentData = {
+    orderCode: orderCode,
+    amount: amount,
+    description: description,
+    returnUrl: `https://discord.com/users/${userId}`,
+    cancelUrl: `https://discord.com/users/${userId}`,
+    buyerName: username,
+    buyerEmail: `${userId}@discord.user`,
+    expiredAt: Math.floor(Date.now() / 1000) + 900 // 15 phút
+  };
+  
+  const response = await callPayOSAPI('/v2/payment-requests', 'POST', paymentData);
+  return response.data;
+}
+
+// Kiểm tra trạng thái thanh toán - API V2
+async function checkPaymentStatus(orderCode) {
+  try {
+    const response = await callPayOSAPI(`/v2/payment-requests/${orderCode}`, 'GET');
+    return response.data;
+  } catch (error) {
+    return null;
   }
 }
 
@@ -103,6 +135,16 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 client.once('ready', async () => {
   console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
+  console.log(`🔗 PayOS API: ${PAYOS_API_URL}`);
+  
+  // Test kết nối PayOS V2
+  console.log('🔍 Testing PayOS V2 connection...');
+  try {
+    await callPayOSAPI('/v2/payment-requests', 'GET');
+    console.log('✅ PayOS V2 connected!');
+  } catch (error) {
+    console.log('⚠️ PayOS V2 connection failed, will retry on each request');
+  }
   
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands.map(cmd => cmd.toJSON()) });
@@ -166,32 +208,7 @@ function createNapMenu() {
   return { components: [row1, row2, row3] };
 }
 
-async function createPaymentLink(orderCode, amount, description, userId, username) {
-  const paymentData = {
-    orderCode: orderCode,
-    amount: amount,
-    description: description,
-    returnUrl: `https://discord.com/users/${userId}`,
-    cancelUrl: `https://discord.com/users/${userId}`,
-    buyerName: username,
-    buyerEmail: `${userId}@discord.user`,
-    expiredAt: Math.floor(Date.now() / 1000) + 900
-  };
-  
-  const response = await callPayOSAPI('https://api.payos.vn/v1/payment-requests', 'POST', paymentData);
-  return response.data;
-}
-
-async function checkPaymentStatus(orderCode) {
-  try {
-    const response = await callPayOSAPI(`https://api.payos.vn/v1/payment-requests/${orderCode}`, 'GET');
-    return response.data;
-  } catch (error) {
-    return null;
-  }
-}
-
-// Kiểm tra thanh toán mỗi 15 giây
+// Kiểm tra thanh toán định kỳ mỗi 15 giây
 setInterval(async () => {
   if (pendingPayments.size === 0) return;
   
@@ -228,7 +245,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isCommand()) {
     if (interaction.commandName === 'start') {
       if (!ADMIN_IDS.includes(interaction.user.id)) {
-        return interaction.reply({ content: '❌ Bạn không có quyền!', flags: 64 }); // ephemeral
+        return interaction.reply({ content: '❌ Bạn không có quyền!', flags: 64 });
       }
       const stats = await db.getAllProductsByType();
       const embed = new EmbedBuilder()
@@ -302,7 +319,7 @@ client.on('interactionCreate', async interaction => {
           .setDescription(`💰 Số tiền: **${amount.toLocaleString()} VND**`)
           .addFields(
             { name: '🔗 LINK THANH TOÁN', value: `[Nhấn vào đây](${paymentData.checkoutUrl})`, inline: false },
-            { name: '📝 Nội dung chuyển khoản', value: `\`${description}\``, inline: true },
+            { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true },
             { name: '⏰ Hết hạn sau', value: '15 phút', inline: true }
           )
           .setImage(paymentData.qrCode)
@@ -314,7 +331,7 @@ client.on('interactionCreate', async interaction => {
       } catch (error) {
         console.error('Nap error:', error);
         await interaction.editReply({ 
-          content: `❌ Lỗi tạo link thanh toán! PayOS hiện không khả dụng.\n\n💡 Vui lòng liên hệ Admin để nạp thủ công qua lệnh /addmoney`,
+          content: `❌ Lỗi tạo link thanh toán!\nLỗi: ${error.response?.data?.desc || error.message}\n\n💡 Vui lòng thử lại sau hoặc liên hệ Admin để nạp thủ công.`,
           flags: 64 
         });
       }
@@ -423,7 +440,7 @@ client.on('interactionCreate', async interaction => {
       } catch (error) {
         console.error('Nap error:', error);
         await interaction.editReply({ 
-          content: `❌ Lỗi tạo link thanh toán! PayOS hiện không khả dụng.\n\n💡 Vui lòng liên hệ Admin để nạp thủ công qua lệnh /addmoney`,
+          content: `❌ Lỗi tạo link thanh toán!\nLỗi: ${error.response?.data?.desc || error.message}\n\n💡 Vui lòng thử lại sau hoặc liên hệ Admin để nạp thủ công.`,
           flags: 64 
         });
       }
