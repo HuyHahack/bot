@@ -33,50 +33,24 @@ const pendingPayments = new Map();
 let mainMenuMessageId = null;
 let mainMenuChannelId = null;
 
-// ============ PAYOS API V2 ĐÚNG CHUẨN ============
+// ============ PAYOS API V2 ============
 const PAYOS_API_URL = 'https://api-merchant.payos.vn';
 
-// Hàm tạo signature theo đúng chuẩn PayOS
 function createSignature(checksumKey, orderCode, amount, description, returnUrl, cancelUrl) {
-  // Chuỗi ký đúng format: amount=xxx&cancelUrl=xxx&description=xxx&orderCode=xxx&returnUrl=xxx
   const data = `amount=${amount}&cancelUrl=${cancelUrl}&description=${description}&orderCode=${orderCode}&returnUrl=${returnUrl}`;
-  
-  console.log('📝 Data to sign:', data);
-  
-  const signature = crypto
-    .createHmac('sha256', checksumKey)
-    .update(data)
-    .digest('hex');
-  
-  console.log('🔑 Signature:', signature);
-  return signature;
+  return crypto.createHmac('sha256', checksumKey).update(data).digest('hex');
 }
 
 async function createPaymentLink(orderCode, amount, description, userId, username) {
   const returnUrl = `https://discord.com/users/${userId}`;
   const cancelUrl = `https://discord.com/users/${userId}`;
   
-  // Tạo signature theo đúng thứ tự tham số
   const signature = createSignature(
     process.env.PAYOS_CHECKSUM_KEY.trim(),
-    orderCode,
-    amount,
-    description,
-    returnUrl,
-    cancelUrl
+    orderCode, amount, description, returnUrl, cancelUrl
   );
   
-  // Body gửi lên API - ĐÚNG CẤU TRÚC CỦA PAYOS V2
-  const body = {
-    orderCode: orderCode,
-    amount: amount,
-    description: description,
-    returnUrl: returnUrl,
-    cancelUrl: cancelUrl,
-    signature: signature
-  };
-  
-  console.log('📤 Sending to PayOS:', JSON.stringify(body, null, 2));
+  const body = { orderCode, amount, description, returnUrl, cancelUrl, signature };
   
   const response = await axios.post(`${PAYOS_API_URL}/v2/payment-requests`, body, {
     headers: {
@@ -86,8 +60,6 @@ async function createPaymentLink(orderCode, amount, description, userId, usernam
     },
     timeout: 15000
   });
-  
-  console.log('📥 PayOS Response:', JSON.stringify(response.data, null, 2));
   
   if (response.data.code !== '00') {
     throw new Error(`${response.data.desc} (code: ${response.data.code})`);
@@ -139,7 +111,6 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 client.once('ready', async () => {
   console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
-  console.log(`🔗 PayOS API V2: ${PAYOS_API_URL}`);
   
   try {
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands.map(cmd => cmd.toJSON()) });
@@ -304,6 +275,9 @@ client.on('interactionCreate', async interaction => {
         
         pendingPayments.set(orderCode, { userId: interaction.user.id, amount, timestamp: Date.now() });
         
+        // Tạo QR từ VietQR (đẹp hơn)
+        const qrUrl = `https://img.vietqr.io/image/${paymentData.bin}-${paymentData.accountNumber}-compact.png?amount=${amount}&addInfo=${description}&accountName=${encodeURIComponent(paymentData.accountName)}`;
+        
         const embed = new EmbedBuilder()
           .setColor(0xFFA500)
           .setTitle('🧧 NẠP TIỀN')
@@ -311,17 +285,19 @@ client.on('interactionCreate', async interaction => {
           .addFields(
             { name: '🔗 LINK THANH TOÁN', value: `[Nhấn vào đây](${paymentData.checkoutUrl})`, inline: false },
             { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true },
+            { name: '🏦 Chuyển khoản tới', value: `${paymentData.accountName} - ${paymentData.accountNumber}`, inline: false },
             { name: '⏰ Hết hạn', value: '15 phút', inline: true }
           )
-          .setImage(paymentData.qrCode)
-          .setFooter({ text: 'Sau khi chuyển khoản, bot sẽ tự cộng tiền' });
+          .setImage(qrUrl)
+          .setFooter({ text: 'Quét QR hoặc bấm link để thanh toán. Bot sẽ tự cộng tiền sau 15-30 giây' })
+          .setTimestamp();
         
         await interaction.editReply({ content: null, embeds: [embed] });
         
       } catch (error) {
         console.error('PayOS error:', error);
         await interaction.editReply({ 
-          content: `❌ Lỗi: ${error.message}\n\nKiểm tra lại Checksum Key trên PayOS Dashboard!`,
+          content: `❌ Lỗi: ${error.message}`,
           ephemeral: true 
         });
       }
@@ -381,7 +357,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle('📖 HƯỚNG DẪN')
-        .setDescription('**Cách mua hàng:**\n1️⃣ Nhấn nút sản phẩm\n2️⃣ Xác nhận\n3️⃣ Nhận thông tin qua DM\n\n**Cách nạp tiền:**\n1️⃣ Nhấn NẠP TIỀN\n2️⃣ Chọn số tiền\n3️⃣ Quét QR chuyển khoản\n4️⃣ Đợi 15-30 giây cộng tiền')
+        .setDescription('**Cách mua hàng:**\n1️⃣ Nhấn nút sản phẩm\n2️⃣ Xác nhận\n3️⃣ Nhận thông tin qua DM\n\n**Cách nạp tiền:**\n1️⃣ Nhấn NẠP TIỀN\n2️⃣ Chọn số tiền\n3️⃣ Quét QR hoặc bấm link\n4️⃣ Chuyển khoản\n5️⃣ Đợi 15-30 giây cộng tiền')
         .setTimestamp();
       await interaction.reply({ embeds: [embed], ephemeral: true });
       return;
@@ -403,23 +379,27 @@ client.on('interactionCreate', async interaction => {
         
         pendingPayments.set(orderCode, { userId, amount, timestamp: Date.now() });
         
+        const qrUrl = `https://img.vietqr.io/image/${paymentData.bin}-${paymentData.accountNumber}-compact.png?amount=${amount}&addInfo=${description}&accountName=${encodeURIComponent(paymentData.accountName)}`;
+        
         const embed = new EmbedBuilder()
           .setColor(0xFFA500)
           .setTitle('🧧 NẠP TIỀN')
           .setDescription(`💰 Số tiền: **${amount.toLocaleString()} VND**`)
           .addFields(
             { name: '🔗 LINK THANH TOÁN', value: `[Nhấn vào đây](${paymentData.checkoutUrl})`, inline: false },
-            { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true }
+            { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true },
+            { name: '🏦 Chuyển khoản tới', value: `${paymentData.accountName} - ${paymentData.accountNumber}`, inline: false }
           )
-          .setImage(paymentData.qrCode)
-          .setFooter({ text: 'Sau khi chuyển khoản, bot sẽ tự cộng tiền' });
+          .setImage(qrUrl)
+          .setFooter({ text: 'Quét QR hoặc bấm link để thanh toán' })
+          .setTimestamp();
         
         await interaction.editReply({ content: null, embeds: [embed] });
         
       } catch (error) {
         console.error('PayOS error:', error);
         await interaction.editReply({ 
-          content: `❌ Lỗi: ${error.message}\n\nKiểm tra lại Checksum Key trên PayOS Dashboard!`,
+          content: `❌ Lỗi: ${error.message}`,
           ephemeral: true 
         });
       }
