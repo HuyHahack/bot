@@ -37,10 +37,14 @@ const PRODUCT_NAMES = {
 };
 
 // Admin ID (thay bằng ID Discord của bạn)
-const ADMIN_IDS = ['1512658477841908015']; // Thay ID của bạn vào đây
+const ADMIN_IDS = ['1512658477841908015'];
 
 // Lưu giao dịch chờ
 const pendingPayments = new Map();
+
+// Lưu message ID của bảng điều khiển để cập nhật sau
+let mainMenuMessageId = null;
+let mainMenuChannelId = null;
 
 // ============ SLASH COMMANDS ============
 const commands = [
@@ -79,51 +83,77 @@ client.once('ready', async () => {
   } catch (error) {
     console.error('❌ Lỗi đăng ký lệnh:', error);
   }
+  
+  // Tự động cập nhật bảng điều khiển mỗi 30 giây
+  setInterval(async () => {
+    if (mainMenuChannelId && mainMenuMessageId) {
+      await updateMainMenu();
+    }
+  }, 30000);
 });
 
-// ============ HÀM TẠO MENU NÚT ============
+// Hàm cập nhật bảng điều khiển (tồn kho)
+async function updateMainMenu() {
+  if (!mainMenuChannelId || !mainMenuMessageId) return;
+  
+  const channel = client.channels.cache.get(mainMenuChannelId);
+  if (!channel) return;
+  
+  try {
+    const message = await channel.messages.fetch(mainMenuMessageId);
+    const stats = await db.getAllProductsByType();
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x00FF00)
+      .setTitle('🏪 CỬA HÀNG BÁN CLONE')
+      .setDescription('Chào mừng bạn đến với cửa hàng!\n\n📋 **Bảng giá:**\n• 🎮 Clone Level 5: **2,500đ**\n• ⚡ Clone Rank KC (7 ngày): **30,000đ**\n• 💎 Clone Rank KC (Vĩnh viễn): **40,000đ**\n\n📦 **Tồn kho hiện tại:**\n• Level 5: **' + (stats.lv5 || 0) + '** cái\n• KC 7 ngày: **' + (stats.kc7d || 0) + '** cái\n• KC Vĩnh viễn: **' + (stats.kcvv || 0) + '** cái\n\n⬇️ **Nhấn nút bên dưới để mua hàng!**')
+      .setFooter({ text: 'Mọi thắc mắc liên hệ Admin' })
+      .setTimestamp();
+    
+    await message.edit({ embeds: [embed], components: createMainMenu().components });
+  } catch (error) {
+    console.error('Update main menu error:', error);
+  }
+}
+
+// Hàm tạo menu chính (DÙNG EPHEMERAL CHO CÁC TƯƠNG TÁC RIÊNG TƯ)
 function createMainMenu() {
   const row1 = new ActionRowBuilder()
     .addComponents(
-      new ButtonBuilder().setCustomId('nap').setLabel('💰 NẠP TIỀN').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('sodu').setLabel('💎 SỐ DƯ').setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId('view_balance').setLabel('💰 XEM SỐ DƯ').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('buy_lv5').setLabel('🎮 Level 5 - 2,500đ').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('buy_kc7d').setLabel('⚡ KC 7 ngày - 30,000đ').setStyle(ButtonStyle.Success)
     );
   
   const row2 = new ActionRowBuilder()
     .addComponents(
-      new ButtonBuilder().setCustomId('buy_lv5').setLabel('🎮 Level 5 - 2,500đ').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('buy_kc7d').setLabel('⚡ KC 7 ngày - 30,000đ').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('buy_kcvv').setLabel('💎 KC Vĩnh viễn - 40,000đ').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId('buy_kcvv').setLabel('💎 KC Vĩnh viễn - 40,000đ').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('show_help').setLabel('❓ HƯỚNG DẪN').setStyle(ButtonStyle.Secondary)
     );
   
-  const row3 = new ActionRowBuilder()
-    .addComponents(
-      new ButtonBuilder().setCustomId('help').setLabel('❓ HƯỚNG DẪN').setStyle(ButtonStyle.Secondary)
-    );
-  
-  return { components: [row1, row2, row3] };
+  return { components: [row1, row2] };
 }
 
-// ============ HÀM TẠO MENU NẠP TIỀN ============
+// Hàm tạo menu nạp tiền (RIÊNG TƯ)
 function createNapMenu() {
   const row = new ActionRowBuilder()
     .addComponents(
-      new ButtonBuilder().setCustomId('nap_5k').setLabel('5,000đ').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('nap_10k').setLabel('10,000đ').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('nap_20k').setLabel('20,000đ').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('nap_50k').setLabel('50,000đ').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('nap_100k').setLabel('100,000đ').setStyle(ButtonStyle.Success)
+      new ButtonBuilder().setCustomId('nap_5000').setLabel('5,000đ').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('nap_10000').setLabel('10,000đ').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('nap_20000').setLabel('20,000đ').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('nap_50000').setLabel('50,000đ').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('nap_100000').setLabel('100,000đ').setStyle(ButtonStyle.Primary)
     );
   
   const row2 = new ActionRowBuilder()
     .addComponents(
-      new ButtonBuilder().setCustomId('back_menu').setLabel('◀️ QUAY LẠI').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId('back_to_menu').setLabel('◀️ QUAY LẠI').setStyle(ButtonStyle.Danger)
     );
   
   return { components: [row, row2] };
 }
 
-// ============ HÀM TẠO PAYMENT LINK ============
+// Hàm tạo payment link
 async function createPaymentLink(orderCode, amount, description, userId, username) {
   try {
     const response = await axios.post('https://api.payos.vn/v1/payment-requests', {
@@ -151,7 +181,7 @@ async function createPaymentLink(orderCode, amount, description, userId, usernam
   }
 }
 
-// ============ KIỂM TRA THANH TOÁN ============
+// Kiểm tra thanh toán
 async function checkPaymentStatus(orderCode) {
   try {
     const response = await axios.get(`https://api.payos.vn/v1/payment-requests/${orderCode}`, {
@@ -164,7 +194,7 @@ async function checkPaymentStatus(orderCode) {
     });
     return response.data.data;
   } catch (error) {
-    console.error(`Check payment ${orderCode} error:`, error.message);
+    console.error(`Check payment error:`, error.message);
     return null;
   }
 }
@@ -190,14 +220,18 @@ setInterval(async () => {
         await user.send({ embeds: [embed] }).catch(() => null);
       }
       pendingPayments.delete(orderCode);
+      
+      // Cập nhật bảng điều khiển (tồn kho có thể thay đổi)
+      await updateMainMenu();
     }
   }
 }, 15000);
 
-// ============ XỬ LÝ COMMANDS ============
+// ============ XỬ LÝ TƯƠNG TÁC ============
 client.on('interactionCreate', async interaction => {
+  // XỬ LÝ SLASH COMMANDS
   if (interaction.isCommand()) {
-    // /start - Chỉ admin
+    // /start - Chỉ admin, tạo bảng công khai
     if (interaction.commandName === 'start') {
       if (!ADMIN_IDS.includes(interaction.user.id)) {
         return interaction.reply({ content: '❌ Bạn không có quyền sử dụng lệnh này!', ephemeral: true });
@@ -207,11 +241,16 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setColor(0x00FF00)
         .setTitle('🏪 CỬA HÀNG BÁN CLONE')
-        .setDescription('Chào mừng bạn đến với cửa hàng!\n\n📋 **Bảng giá:**\n• 🎮 Clone Level 5: **2,500đ**\n• ⚡ Clone Rank KC (7 ngày): **30,000đ**\n• 💎 Clone Rank KC (Vĩnh viễn): **40,000đ**\n\n📦 **Tồn kho:**\n• Level 5: ${stats.lv5 || 0} cái\n• KC 7 ngày: ${stats.kc7d || 0} cái\n• KC Vĩnh viễn: ${stats.kcvv || 0} cái\n\n⬇️ **Nhấn nút bên dưới để bắt đầu!**')
+        .setDescription('Chào mừng bạn đến với cửa hàng!\n\n📋 **Bảng giá:**\n• 🎮 Clone Level 5: **2,500đ**\n• ⚡ Clone Rank KC (7 ngày): **30,000đ**\n• 💎 Clone Rank KC (Vĩnh viễn): **40,000đ**\n\n📦 **Tồn kho hiện tại:**\n• Level 5: **' + (stats.lv5 || 0) + '** cái\n• KC 7 ngày: **' + (stats.kc7d || 0) + '** cái\n• KC Vĩnh viễn: **' + (stats.kcvv || 0) + '** cái\n\n⬇️ **Nhấn nút bên dưới để mua hàng!**')
         .setFooter({ text: 'Mọi thắc mắc liên hệ Admin' })
         .setTimestamp();
       
-      await interaction.reply({ embeds: [embed], ...createMainMenu() });
+      const message = await interaction.reply({ embeds: [embed], ...createMainMenu(), fetchReply: true });
+      
+      // Lưu lại để tự động cập nhật tồn kho
+      mainMenuMessageId = message.id;
+      mainMenuChannelId = message.channel.id;
+      return;
     }
     
     // /addclone - Chỉ admin
@@ -226,100 +265,78 @@ client.on('interactionCreate', async interaction => {
       
       await db.addClone(type, email, password);
       await interaction.reply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]} thành công!\n📧 Email: ${email}\n🔑 Pass: ${password}`, ephemeral: true });
+      
+      // Cập nhật bảng điều khiển
+      await updateMainMenu();
+      return;
     }
   }
   
-  // Xử lý nút bấm
+  // XỬ LÝ NÚT BẤM (TẤT CẢ ĐỀU EPHEMERAL - CHỈ USER BẤM THẤY)
   if (interaction.isButton()) {
     const userId = interaction.user.id;
     
-    // Nút QUAY LẠI
-    if (interaction.customId === 'back_menu') {
-      const stats = await db.getAllProductsByType();
-      const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('🏪 CỬA HÀNG BÁN CLONE')
-        .setDescription(`📦 **Tồn kho hiện tại:**\n• Level 5: ${stats.lv5 || 0} cái\n• KC 7 ngày: ${stats.kc7d || 0} cái\n• KC Vĩnh viễn: ${stats.kcvv || 0} cái\n\n⬇️ **Chọn sản phẩm:**`)
-        .setTimestamp();
-      await interaction.update({ embeds: [embed], ...createMainMenu() });
-      return;
-    }
-    
-    // Nút NẠP TIỀN
-    if (interaction.customId === 'nap') {
-      const embed = new EmbedBuilder()
-        .setColor(0xFFA500)
-        .setTitle('💰 NẠP TIỀN')
-        .setDescription('Chọn số tiền muốn nạp (tối thiểu 5,000đ):')
-        .setTimestamp();
-      await interaction.update({ embeds: [embed], ...createNapMenu() });
-      return;
-    }
-    
-    // Nút chọn số tiền nạp
-    if (interaction.customId.startsWith('nap_')) {
-      const amount = parseInt(interaction.customId.split('_')[1]);
-      if (amount < 5000) {
-        return interaction.reply({ content: '⚠️ Số tiền nạp tối thiểu là **5,000 VND**!', ephemeral: true });
-      }
-      
-      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, ephemeral: true });
-      
-      try {
-        const orderCode = Number(Date.now());
-        const description = `NAP${userId.slice(-8)}`;
-        
-        const paymentData = await createPaymentLink(orderCode, amount, description, userId, interaction.user.username);
-        
-        pendingPayments.set(orderCode, { userId, amount, timestamp: Date.now() });
-        
-        const embed = new EmbedBuilder()
-          .setColor(0xFFA500)
-          .setTitle('🧧 NẠP TIỀN')
-          .setDescription(`💰 Số tiền: **${amount.toLocaleString()} VND**`)
-          .addFields(
-            { name: '🔗 LINK THANH TOÁN', value: `[Nhấn vào đây](${paymentData.checkoutUrl})`, inline: false },
-            { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true },
-            { name: '⏰ Hết hạn', value: '15 phút', inline: true }
-          )
-          .setImage(paymentData.qrCode)
-          .setFooter({ text: 'Sau khi chuyển khoản, bot sẽ tự động cộng tiền' })
-          .setTimestamp();
-        
-        await interaction.editReply({ content: null, embeds: [embed] });
-      } catch (error) {
-        await interaction.editReply({ content: '❌ Lỗi tạo link thanh toán! Thử lại sau.', ephemeral: true });
-      }
-      return;
-    }
-    
-    // Nút SỐ DƯ
-    if (interaction.customId === 'sodu') {
+    // Nút XEM SỐ DƯ (ephemeral)
+    if (interaction.customId === 'view_balance') {
       const balance = await db.getBalance(userId);
       const embed = new EmbedBuilder()
         .setColor(0x00FF00)
         .setTitle('💰 SỐ DƯ TÀI KHOẢN')
         .setDescription(`**${balance.toLocaleString()} VND**`)
         .setTimestamp();
+      
       await interaction.reply({ embeds: [embed], ephemeral: true });
       return;
     }
     
-    // Nút MUA HÀNG
-    if (interaction.customId.startsWith('buy_')) {
-      const productType = interaction.customId.replace('buy_', '');
+    // Nút quay lại (ephemeral)
+    if (interaction.customId === 'back_to_menu') {
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('🏪 CỬA HÀNG BÁN CLONE')
+        .setDescription('Chọn sản phẩm bạn muốn mua:')
+        .setTimestamp();
+      
+      await interaction.update({ embeds: [embed], components: createMainMenu().components, ephemeral: true });
+      return;
+    }
+    
+    // Nút HƯỚNG DẪN (ephemeral)
+    if (interaction.customId === 'show_help') {
+      const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle('📖 HƯỚNG DẪN SỬ DỤNG')
+        .setDescription('**Cách mua hàng:**\n1️⃣ Nhấn nút sản phẩm muốn mua\n2️⃣ Xác nhận giao dịch\n3️⃣ Nhận thông tin qua DM\n\n**Cách nạp tiền (chưa có tiền):**\n→ Liên hệ Admin để được hỗ trợ nạp\n\n**Lưu ý:**\n• Thông tin clone chỉ gửi 1 lần duy nhất\n• Bảo mật thông tin đăng nhập\n• Liên hệ admin nếu có vấn đề')
+        .setTimestamp();
+      
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+      return;
+    }
+    
+    // Nút NẠP TIỀN (chưa có chức năng vì min 5k, để dành cho admin)
+    if (interaction.customId.startsWith('nap_')) {
+      // Hiện tại chưa mở nạp online, chỉ admin nạp thủ công
+      await interaction.reply({ 
+        content: '⚠️ Hiện tại tính năng nạp online đang tạm khóa. Vui lòng liên hệ Admin để được hỗ trợ nạp tiền!\n\n💬 Liên hệ: @admin', 
+        ephemeral: true 
+      });
+      return;
+    }
+    
+    // Nút MUA LEVEL 5
+    if (interaction.customId === 'buy_lv5') {
+      const productType = 'lv5';
       const price = PRICES[productType];
       const productName = PRODUCT_NAMES[productType];
       
       const balance = await db.getBalance(userId);
       if (balance < price) {
         return interaction.reply({ 
-          content: `⚠️ Bạn không đủ tiền! Cần **${price.toLocaleString()} VND**, bạn có **${balance.toLocaleString()} VND**`,
+          content: `⚠️ Bạn không đủ tiền! Cần **${price.toLocaleString()} VND**, bạn có **${balance.toLocaleString()} VND**\n\n💬 Liên hệ Admin để nạp thêm tiền!`, 
           ephemeral: true 
         });
       }
       
-      // Tìm clone có sẵn
       const clone = await db.getAvailableClone(productType);
       if (!clone) {
         return interaction.reply({ content: '❌ Sản phẩm này đã hết hàng! Vui lòng chờ admin nhập thêm.', ephemeral: true });
@@ -328,13 +345,10 @@ client.on('interactionCreate', async interaction => {
       // Trừ tiền
       const result = await db.deductBalance(userId, price, clone.id, productType);
       if (result.success) {
-        // Đánh dấu clone đã bán
         await db.markCloneSold(clone.id);
-        
-        // Lưu thông tin clone để gửi DM
         await db.savePendingClone(userId, clone.id, productType, clone.email, clone.password);
         
-        // Gửi thông tin clone qua DM
+        // Gửi DM
         const user = await client.users.fetch(userId);
         const embed = new EmbedBuilder()
           .setColor(0x00FF00)
@@ -354,20 +368,114 @@ client.on('interactionCreate', async interaction => {
           content: `✅ Mua **${productName}** thành công! Thông tin đăng nhập đã được gửi qua DM.`,
           ephemeral: true 
         });
+        
+        // Cập nhật tồn kho
+        await updateMainMenu();
       } else {
         await interaction.reply({ content: '❌ Giao dịch thất bại! Vui lòng thử lại.', ephemeral: true });
       }
       return;
     }
     
-    // Nút HELP
-    if (interaction.customId === 'help') {
-      const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle('📖 HƯỚNG DẪN SỬ DỤNG')
-        .setDescription('**Cách mua hàng:**\n1️⃣ Nhấn nút sản phẩm muốn mua\n2️⃣ Xác nhận giao dịch\n3️⃣ Nhận thông tin qua DM\n\n**Cách nạp tiền:**\n1️⃣ Nhấn nút NẠP TIỀN\n2️⃣ Chọn số tiền\n3️⃣ Quét QR hoặc bấm link\n4️⃣ Chuyển khoản\n5️⃣ Đợi 15-30 giây để cộng tiền\n\n**Lưu ý:**\n• Thông tin clone chỉ gửi 1 lần duy nhất\n• Bảo mật thông tin đăng nhập\n• Liên hệ admin nếu có vấn đề')
-        .setTimestamp();
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+    // Nút MUA KC 7 NGÀY
+    if (interaction.customId === 'buy_kc7d') {
+      const productType = 'kc7d';
+      const price = PRICES[productType];
+      const productName = PRODUCT_NAMES[productType];
+      
+      const balance = await db.getBalance(userId);
+      if (balance < price) {
+        return interaction.reply({ 
+          content: `⚠️ Bạn không đủ tiền! Cần **${price.toLocaleString()} VND**, bạn có **${balance.toLocaleString()} VND**\n\n💬 Liên hệ Admin để nạp thêm tiền!`, 
+          ephemeral: true 
+        });
+      }
+      
+      const clone = await db.getAvailableClone(productType);
+      if (!clone) {
+        return interaction.reply({ content: '❌ Sản phẩm này đã hết hàng! Vui lòng chờ admin nhập thêm.', ephemeral: true });
+      }
+      
+      const result = await db.deductBalance(userId, price, clone.id, productType);
+      if (result.success) {
+        await db.markCloneSold(clone.id);
+        await db.savePendingClone(userId, clone.id, productType, clone.email, clone.password);
+        
+        const user = await client.users.fetch(userId);
+        const embed = new EmbedBuilder()
+          .setColor(0x00FF00)
+          .setTitle('✅ MUA HÀNG THÀNH CÔNG!')
+          .setDescription(`Bạn đã mua **${productName}** với giá **${price.toLocaleString()} VND**`)
+          .addFields(
+            { name: '📧 Email', value: `||${clone.email}||`, inline: true },
+            { name: '🔑 Mật khẩu', value: `||${clone.password}||`, inline: true },
+            { name: '💰 Số dư còn lại', value: `${result.newBalance.toLocaleString()} VND`, inline: true }
+          )
+          .setFooter({ text: 'Thông tin đăng nhập chỉ hiện một lần, hãy lưu lại!' })
+          .setTimestamp();
+        
+        await user.send({ embeds: [embed] }).catch(() => null);
+        
+        await interaction.reply({ 
+          content: `✅ Mua **${productName}** thành công! Thông tin đăng nhập đã được gửi qua DM.`,
+          ephemeral: true 
+        });
+        
+        await updateMainMenu();
+      } else {
+        await interaction.reply({ content: '❌ Giao dịch thất bại! Vui lòng thử lại.', ephemeral: true });
+      }
+      return;
+    }
+    
+    // Nút MUA KC VĨNH VIỄN
+    if (interaction.customId === 'buy_kcvv') {
+      const productType = 'kcvv';
+      const price = PRICES[productType];
+      const productName = PRODUCT_NAMES[productType];
+      
+      const balance = await db.getBalance(userId);
+      if (balance < price) {
+        return interaction.reply({ 
+          content: `⚠️ Bạn không đủ tiền! Cần **${price.toLocaleString()} VND**, bạn có **${balance.toLocaleString()} VND**\n\n💬 Liên hệ Admin để nạp thêm tiền!`, 
+          ephemeral: true 
+        });
+      }
+      
+      const clone = await db.getAvailableClone(productType);
+      if (!clone) {
+        return interaction.reply({ content: '❌ Sản phẩm này đã hết hàng! Vui lòng chờ admin nhập thêm.', ephemeral: true });
+      }
+      
+      const result = await db.deductBalance(userId, price, clone.id, productType);
+      if (result.success) {
+        await db.markCloneSold(clone.id);
+        await db.savePendingClone(userId, clone.id, productType, clone.email, clone.password);
+        
+        const user = await client.users.fetch(userId);
+        const embed = new EmbedBuilder()
+          .setColor(0x00FF00)
+          .setTitle('✅ MUA HÀNG THÀNH CÔNG!')
+          .setDescription(`Bạn đã mua **${productName}** với giá **${price.toLocaleString()} VND**`)
+          .addFields(
+            { name: '📧 Email', value: `||${clone.email}||`, inline: true },
+            { name: '🔑 Mật khẩu', value: `||${clone.password}||`, inline: true },
+            { name: '💰 Số dư còn lại', value: `${result.newBalance.toLocaleString()} VND`, inline: true }
+          )
+          .setFooter({ text: 'Thông tin đăng nhập chỉ hiện một lần, hãy lưu lại!' })
+          .setTimestamp();
+        
+        await user.send({ embeds: [embed] }).catch(() => null);
+        
+        await interaction.reply({ 
+          content: `✅ Mua **${productName}** thành công! Thông tin đăng nhập đã được gửi qua DM.`,
+          ephemeral: true 
+        });
+        
+        await updateMainMenu();
+      } else {
+        await interaction.reply({ content: '❌ Giao dịch thất bại! Vui lòng thử lại.', ephemeral: true });
+      }
       return;
     }
   }
