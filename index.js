@@ -101,6 +101,9 @@ const commands = [
     .addStringOption(option => option.setName('email').setDescription('Email').setRequired(true))
     .addStringOption(option => option.setName('password').setDescription('Mật khẩu').setRequired(true)),
   new SlashCommandBuilder()
+    .setName('removeclone')
+    .setDescription('Xóa clone khỏi kho (Chỉ admin)'),
+  new SlashCommandBuilder()
     .setName('addmoney')
     .setDescription('Cộng tiền cho user (Chỉ admin)')
     .addUserOption(option => option.setName('user').setDescription('Người dùng').setRequired(true))
@@ -174,6 +177,43 @@ function createNapMenu() {
   return { components: [row1, row2, row3] };
 }
 
+// Hiển thị danh sách clone để xóa
+async function showRemoveCloneMenu(interaction) {
+  const clones = await db.getAllClones();
+  const availableClones = clones.filter(c => c.status === 'available');
+  
+  if (availableClones.length === 0) {
+    return interaction.reply({ content: '📦 Không có clone nào trong kho!', ephemeral: true });
+  }
+  
+  // Nhóm theo type
+  const grouped = { lv5: [], kc7d: [], kcvv: [] };
+  availableClones.forEach(clone => {
+    grouped[clone.type].push(clone);
+  });
+  
+  let description = '**📋 DANH SÁCH CLONE TRONG KHO:**\n\n';
+  
+  for (const [type, clones] of Object.entries(grouped)) {
+    if (clones.length === 0) continue;
+    description += `**${PRODUCT_NAMES[type]}** (${clones.length} cái):\n`;
+    clones.forEach(clone => {
+      description += `└ ID: \`${clone.id}\` - ${clone.email}\n`;
+    });
+    description += '\n';
+  }
+  
+  description += '\n💡 **Cách xóa:** Gõ `/removeclone <ID>` để xóa clone theo ID';
+  
+  const embed = new EmbedBuilder()
+    .setColor(0xFF6600)
+    .setTitle('🗑️ QUẢN LÝ CLONE')
+    .setDescription(description)
+    .setTimestamp();
+  
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
 setInterval(async () => {
   if (pendingPayments.size === 0) return;
   
@@ -230,8 +270,31 @@ client.on('interactionCreate', async interaction => {
       const email = interaction.options.getString('email');
       const password = interaction.options.getString('password');
       await db.addClone(type, email, password);
-      await interaction.reply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!`, ephemeral: true });
+      await interaction.reply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!\n📧 ${email}\n🔑 ${password}`, ephemeral: true });
       await updateMainMenu();
+      return;
+    }
+    
+    // Lệnh removeclone - hiển thị danh sách hoặc xóa theo ID
+    if (interaction.commandName === 'removeclone') {
+      if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Không có quyền!', ephemeral: true });
+      
+      // Lấy ID nếu có (từ option)
+      const cloneId = interaction.options.getInteger('id');
+      
+      if (cloneId) {
+        // Xóa clone theo ID
+        const removed = await db.removeCloneById(cloneId);
+        if (removed) {
+          await interaction.reply({ content: `✅ Đã xóa clone ID \`${cloneId}\` (${removed.email}) khỏi kho!`, ephemeral: true });
+          await updateMainMenu();
+        } else {
+          await interaction.reply({ content: `❌ Không tìm thấy clone với ID \`${cloneId}\`!`, ephemeral: true });
+        }
+      } else {
+        // Hiển thị danh sách
+        await showRemoveCloneMenu(interaction);
+      }
       return;
     }
     
@@ -253,7 +316,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
   
-  // MODAL
+  // MODAL - Nhập số tiền tùy chỉnh
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'custom_amount_modal') {
       const amountStr = interaction.fields.getTextInputValue('custom_amount');
@@ -275,7 +338,6 @@ client.on('interactionCreate', async interaction => {
         
         pendingPayments.set(orderCode, { userId: interaction.user.id, amount, timestamp: Date.now() });
         
-        // Tạo QR từ VietQR (đẹp hơn)
         const qrUrl = `https://img.vietqr.io/image/${paymentData.bin}-${paymentData.accountNumber}-compact.png?amount=${amount}&addInfo=${description}&accountName=${encodeURIComponent(paymentData.accountName)}`;
         
         const embed = new EmbedBuilder()
@@ -406,7 +468,7 @@ client.on('interactionCreate', async interaction => {
       return;
     }
     
-    // MUA HÀNG
+    // MUA HÀNG - FIX LỖI HẾT HÀNG
     const buyActions = { buy_lv5: 'lv5', buy_kc7d: 'kc7d', buy_kcvv: 'kcvv' };
     if (buyActions[interaction.customId]) {
       const productType = buyActions[interaction.customId];
@@ -423,7 +485,7 @@ client.on('interactionCreate', async interaction => {
       
       const clone = await db.getAvailableClone(productType);
       if (!clone) {
-        return interaction.reply({ content: '❌ Hết hàng!', ephemeral: true });
+        return interaction.reply({ content: '❌ Sản phẩm này đã hết hàng! Vui lòng chờ admin nhập thêm.', ephemeral: true });
       }
       
       const result = await db.deductBalance(userId, price, clone.id, productType);
@@ -443,10 +505,10 @@ client.on('interactionCreate', async interaction => {
           .setTimestamp();
         
         await user.send({ embeds: [embed] }).catch(() => null);
-        await interaction.reply({ content: `✅ Mua thành công! Đã gửi DM.`, ephemeral: true });
+        await interaction.reply({ content: `✅ Mua **${productName}** thành công! Đã gửi DM.`, ephemeral: true });
         await updateMainMenu();
       } else {
-        await interaction.reply({ content: '❌ Giao dịch thất bại!', ephemeral: true });
+        await interaction.reply({ content: '❌ Giao dịch thất bại! Vui lòng thử lại.', ephemeral: true });
       }
       return;
     }
