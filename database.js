@@ -120,7 +120,7 @@ async function deductBalance(userId, amount, productId = null, productType = nul
   }
 }
 
-// Product (Clone) functions - FIX LỖI getAvailableClone
+// Product (Clone) functions
 async function addClone(type, email, password) {
   const result = await pool.query(
     'INSERT INTO products (type, email, password, status) VALUES ($1, $2, $3, $4) RETURNING id',
@@ -185,16 +185,18 @@ async function getAndClearPendingClone(userId) {
   }
 }
 
+// UPDATE: Thống kê thêm loại kclogx
 async function getAllProductsByType() {
   const result = await pool.query(
     'SELECT type, COUNT(*) as count FROM products WHERE status = $1 GROUP BY type',
     ['available']
   );
-  const stats = { lv5: 0, kc7d: 0, kcvv: 0 };
+  const stats = { lv5: 0, kc7d: 0, kcvv: 0, kclogx: 0 };
   result.rows.forEach(row => {
     if (row.type === 'lv5') stats.lv5 = parseInt(row.count);
     else if (row.type === 'kc7d') stats.kc7d = parseInt(row.count);
     else if (row.type === 'kcvv') stats.kcvv = parseInt(row.count);
+    else if (row.type === 'kclogx') stats.kclogx = parseInt(row.count);
   });
   return stats;
 }
