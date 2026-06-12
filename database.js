@@ -8,7 +8,6 @@ const pool = new Pool({
 async function initDatabase() {
   const client = await pool.connect();
   try {
-    // Bảng users
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         user_id TEXT PRIMARY KEY,
@@ -17,7 +16,6 @@ async function initDatabase() {
       )
     `);
     
-    // Bảng products (clone)
     await client.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
@@ -29,7 +27,6 @@ async function initDatabase() {
       )
     `);
     
-    // Bảng transactions
     await client.query(`
       CREATE TABLE IF NOT EXISTS transactions (
         id SERIAL PRIMARY KEY,
@@ -42,7 +39,6 @@ async function initDatabase() {
       )
     `);
     
-    // Bảng pending_clones (chờ gửi cho user)
     await client.query(`
       CREATE TABLE IF NOT EXISTS pending_clones (
         id SERIAL PRIMARY KEY,
@@ -124,7 +120,7 @@ async function deductBalance(userId, amount, productId = null, productType = nul
   }
 }
 
-// Product (Clone) functions
+// Product (Clone) functions - FIX LỖI getAvailableClone
 async function addClone(type, email, password) {
   const result = await pool.query(
     'INSERT INTO products (type, email, password, status) VALUES ($1, $2, $3, $4) RETURNING id',
@@ -133,16 +129,29 @@ async function addClone(type, email, password) {
   return result.rows[0].id;
 }
 
+// FIX: Lấy đúng clone available theo type
 async function getAvailableClone(type) {
   const result = await pool.query(
-    'SELECT * FROM products WHERE type = $1 AND status = $1 ORDER BY id LIMIT 1',
-    [type]
+    'SELECT * FROM products WHERE type = $1 AND status = $2 ORDER BY id LIMIT 1',
+    [type, 'available']
   );
   return result.rows[0] || null;
 }
 
 async function markCloneSold(id) {
   await pool.query('UPDATE products SET status = $1 WHERE id = $2', ['sold', id]);
+}
+
+async function getAllClones() {
+  const result = await pool.query(
+    'SELECT id, type, email, password, status, created_at FROM products ORDER BY type, id'
+  );
+  return result.rows;
+}
+
+async function removeCloneById(id) {
+  const result = await pool.query('DELETE FROM products WHERE id = $1 RETURNING *', [id]);
+  return result.rows[0] || null;
 }
 
 async function savePendingClone(userId, productId, productType, email, password) {
@@ -181,14 +190,19 @@ async function getAllProductsByType() {
     'SELECT type, COUNT(*) as count FROM products WHERE status = $1 GROUP BY type',
     ['available']
   );
-  const stats = {};
-  result.rows.forEach(row => { stats[row.type] = parseInt(row.count); });
+  const stats = { lv5: 0, kc7d: 0, kcvv: 0 };
+  result.rows.forEach(row => {
+    if (row.type === 'lv5') stats.lv5 = parseInt(row.count);
+    else if (row.type === 'kc7d') stats.kc7d = parseInt(row.count);
+    else if (row.type === 'kcvv') stats.kcvv = parseInt(row.count);
+  });
   return stats;
 }
 
 module.exports = { 
   getBalance, addBalance, deductBalance, 
   addClone, getAvailableClone, markCloneSold, 
+  getAllClones, removeCloneById,
   savePendingClone, getAndClearPendingClone, 
   getAllProductsByType 
 };
