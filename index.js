@@ -25,12 +25,13 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessages] 
 });
 
-// Giá sản phẩm (Giữ nguyên giá gốc của bạn)
-const PRICES = { 'lv5': 2500, 'kc7d': 30000, 'kcvv': 40000 };
+// Giá sản phẩm (Thêm kclogx giá 40,000đ)
+const PRICES = { 'lv5': 2500, 'kc7d': 30000, 'kcvv': 40000, 'kclogx': 40000 };
 const PRODUCT_NAMES = { 
   'lv5': '🎮 Clone Level 5', 
   'kc7d': '⚡ Clone KC Mail 7 ngày', 
-  'kcvv': '💎 Clone KC Mail Vĩnh viễn' 
+  'kcvv': '💎 Clone KC Mail Vĩnh viễn',
+  'kclogx': '🐦 Clone KC Log X'
 };
 const ADMIN_IDS = ['1507070505319006380']; // Thay ID admin của bạn
 
@@ -101,9 +102,10 @@ const commands = [
         .addChoices(
           { name: 'Level 5 (2,500đ)', value: 'lv5' },
           { name: 'Rank KC 7 ngày (30,000đ)', value: 'kc7d' },
-          { name: 'Rank KC Vĩnh viễn (40,000đ)', value: 'kcvv' }
+          { name: 'Rank KC Vĩnh viễn (40,000đ)', value: 'kcvv' },
+          { name: 'Rank KC Log X (40,000đ)', value: 'kclogx' }
         ))
-    .addStringOption(option => option.setName('email').setDescription('Email').setRequired(true))
+    .addStringOption(option => option.setName('email').setDescription('Email/Tài khoản').setRequired(true))
     .addStringOption(option => option.setName('password').setDescription('Mật khẩu').setRequired(true)),
   new SlashCommandBuilder()
     .setName('removeclone')
@@ -150,7 +152,8 @@ async function updateMainMenu() {
         `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
         `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
         `🟩 **Acc Clone KC Mail 7 ngày:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
-        `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n\n` +
+        `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n` +
+        `🐦 **Acc Clone KC Log X:** \`${(PRICES.kclogx).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kclogx || 0}\`\n\n` +
         `⚠️ **Lưu ý quan trọng:**\n` +
         `Yêu cầu quay video khi mua và login luôn\n` +
         `ngay sau khi vừa mua để làm bằng chứng.\n` +
@@ -183,7 +186,12 @@ async function updateMainMenu() {
           .setLabel('💎 Clone KC Mail Vĩnh viễn')
           .setDescription(`Giá: ${(PRICES.kcvv).toLocaleString()}đ`)
           .setValue('kcvv')
-          .setEmoji('💎')
+          .setEmoji('💎'),
+        new StringSelectMenuOptionBuilder()
+          .setLabel('🐦 Clone KC Log X')
+          .setDescription(`Giá: ${(PRICES.kclogx).toLocaleString()}đ`)
+          .setValue('kclogx')
+          .setEmoji('🐦')
       ]);
     
     const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
@@ -218,8 +226,8 @@ async function showRemoveCloneMenu(interaction) {
     return interaction.reply({ content: '📦 Không có clone nào trong kho!', ephemeral: true });
   }
   
-  const grouped = { lv5: [], kc7d: [], kcvv: [] };
-  availableClones.forEach(clone => { grouped[clone.type].push(clone); });
+  const grouped = { lv5: [], kc7d: [], kcvv: [], kclogx: [] };
+  availableClones.forEach(clone => { if(grouped[clone.type]) grouped[clone.type].push(clone); });
   
   let description = '**📋 DANH SÁCH CLONE TRONG KHO:**\n\n';
   for (const [type, clones] of Object.entries(grouped)) {
@@ -299,7 +307,7 @@ async function handlePurchase(interaction, productType) {
       .setTitle('✅ MUA HÀNG THÀNH CÔNG!')
       .setDescription(`Bạn đã mua **${productName}** với giá **${price.toLocaleString()} VND**`)
       .addFields(
-        { name: '📧 Email', value: `||${clone.email}||`, inline: true },
+        { name: '📧 Email/Tài khoản', value: `||${clone.email}||`, inline: true },
         { name: '🔑 Mật khẩu', value: `||${clone.password}||`, inline: true },
         { name: '💰 Số dư còn lại', value: `${result.newBalance.toLocaleString()} VND`, inline: true }
       )
@@ -338,7 +346,8 @@ client.on('interactionCreate', async interaction => {
           `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
           `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
           `🟩 **Acc Clone KC Mail 7 ngày:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
-          `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n\n` +
+          `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n` +
+          `🐦 **Acc Clone KC Log X:** \`${(PRICES.kclogx).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kclogx || 0}\`\n\n` +
           `⚠️ **Lưu ý quan trọng:**\n` +
           `Yêu cầu quay video khi mua và login luôn\n` +
           `ngay sau khi vừa mua để làm bằng chứng.\n` +
@@ -366,7 +375,12 @@ client.on('interactionCreate', async interaction => {
             .setLabel('💎 Clone KC Mail Vĩnh viễn')
             .setDescription(`Giá: ${(PRICES.kcvv).toLocaleString()}đ`)
             .setValue('kcvv')
-            .setEmoji('💎')
+            .setEmoji('💎'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('🐦 Clone KC Log X')
+            .setDescription(`Giá: ${(PRICES.kclogx).toLocaleString()}đ`)
+            .setValue('kclogx')
+            .setEmoji('🐦')
         ]);
       
       const rowButton = new ActionRowBuilder().addComponents(
@@ -376,7 +390,6 @@ client.on('interactionCreate', async interaction => {
 
       const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
       
-      // CHỈ CÓ tin nhắn này là công khai (ephemeral: false)
       const message = await interaction.reply({ embeds: [embed], components: [rowButton, rowSelect], fetchReply: true });
       mainMenuMessageId = message.id;
       mainMenuChannelId = message.channel.id;
