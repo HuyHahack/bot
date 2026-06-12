@@ -27,7 +27,7 @@ const client = new Client({
 
 const PRICES = { 'lv5': 2500, 'kc7d': 30000, 'kcvv': 40000 };
 const PRODUCT_NAMES = { 'lv5': '🎮 Clone Level 5', 'kc7d': '⚡ Clone Rank KC (7 ngày)', 'kcvv': '💎 Clone Rank KC (Vĩnh viễn)' };
-const ADMIN_IDS = ['1512658477841908015'];
+const ADMIN_IDS = ['1507070505319006380'];
 
 const pendingPayments = new Map();
 let mainMenuMessageId = null;
