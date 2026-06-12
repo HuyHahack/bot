@@ -27,7 +27,11 @@ const client = new Client({
 
 // Giá sản phẩm (Giữ nguyên giá gốc của bạn)
 const PRICES = { 'lv5': 2500, 'kc7d': 30000, 'kcvv': 40000 };
-const PRODUCT_NAMES = { 'lv5': '🎮 Clone Level 5', 'kc7d': '⚡ Clone Rank KC (7 ngày)', 'kcvv': '💎 Clone Rank KC (Vĩnh viễn)' };
+const PRODUCT_NAMES = { 
+  'lv5': '🎮 Clone Level 5', 
+  'kc7d': '⚡ Clone KC Mail 7 ngày', 
+  'kcvv': '💎 Clone KC Mail Vĩnh viễn' 
+};
 const ADMIN_IDS = ['1507070505319006380']; // Thay ID admin của bạn
 
 const pendingPayments = new Map();
@@ -145,7 +149,8 @@ async function updateMainMenu() {
         `💰 **Nạp tiền** để mua hàng\n` +
         `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
         `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
-        `🟩 **Acc Clone Rank KC:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n\n` +
+        `🟩 **Acc Clone KC Mail 7 ngày:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
+        `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n\n` +
         `⚠️ **Lưu ý quan trọng:**\n` +
         `Yêu cầu quay video khi mua và login luôn\n` +
         `ngay sau khi vừa mua để làm bằng chứng.\n` +
@@ -155,13 +160,11 @@ async function updateMainMenu() {
       .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
       .setFooter({ text: 'Hệ thống bán Acc tự động' });
     
-    // Nút bấm Nạp tiền (Xanh lá) và Số dư (Xám) xếp thành một dòng
     const rowButton = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('nap_menu').setLabel('💰 Nạp tiền').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId('view_balance').setLabel('📊 Số dư').setStyle(ButtonStyle.Secondary)
     );
 
-    // Menu chọn sản phẩm
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('product_select')
       .setPlaceholder('🛒 | Chọn sản phẩm để mua')
@@ -172,12 +175,12 @@ async function updateMainMenu() {
           .setValue('lv5')
           .setEmoji('🎮'),
         new StringSelectMenuOptionBuilder()
-          .setLabel('⚡ Clone Rank KC (7 ngày)')
+          .setLabel('⚡ Clone KC Mail 7 ngày')
           .setDescription(`Giá: ${(PRICES.kc7d).toLocaleString()}đ`)
           .setValue('kc7d')
           .setEmoji('⚡'),
         new StringSelectMenuOptionBuilder()
-          .setLabel('💎 Clone Rank KC (Vĩnh viễn)')
+          .setLabel('💎 Clone KC Mail Vĩnh viễn')
           .setDescription(`Giá: ${(PRICES.kcvv).toLocaleString()}đ`)
           .setValue('kcvv')
           .setEmoji('💎')
@@ -321,7 +324,8 @@ client.on('interactionCreate', async interaction => {
           `💰 **Nạp tiền** để mua hàng\n` +
           `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
           `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
-          `🟩 **Acc Clone Rank KC:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n\n` +
+          `🟩 **Acc Clone KC Mail 7 ngày:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
+          `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n\n` +
           `⚠️ **Lưu ý quan trọng:**\n` +
           `Yêu cầu quay video khi mua và login luôn\n` +
           `ngay sau khi vừa mua để làm bằng chứng.\n` +
@@ -341,12 +345,12 @@ client.on('interactionCreate', async interaction => {
             .setValue('lv5')
             .setEmoji('🎮'),
           new StringSelectMenuOptionBuilder()
-            .setLabel('⚡ Clone Rank KC (7 ngày)')
+            .setLabel('⚡ Clone KC Mail 7 ngày')
             .setDescription(`Giá: ${(PRICES.kc7d).toLocaleString()}đ`)
             .setValue('kc7d')
             .setEmoji('⚡'),
           new StringSelectMenuOptionBuilder()
-            .setLabel('💎 Clone Rank KC (Vĩnh viễn)')
+            .setLabel('💎 Clone KC Mail Vĩnh viễn')
             .setDescription(`Giá: ${(PRICES.kcvv).toLocaleString()}đ`)
             .setValue('kcvv')
             .setEmoji('💎')
@@ -421,7 +425,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
   
-  // MODAL - Nhập số tiền tùy chỉnh
+  // MODAL - Nhập số tiền tùy chỉnh (Tự xóa sau 5 phút, không gửi kèm link)
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'custom_amount_modal') {
       const amountStr = interaction.fields.getTextInputValue('custom_amount');
@@ -434,7 +438,8 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '⚠️ Tối đa 5,000,000đ!', ephemeral: true });
       }
       
-      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, ephemeral: true });
+      // Trả lời công khai trong kênh để lấy đối tượng tin nhắn
+      const replyMsg = await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, fetchReply: true });
       
       try {
         const orderCode = Number(Date.now());
@@ -450,23 +455,30 @@ client.on('interactionCreate', async interaction => {
           .setTitle('🧧 NẠP TIỀN')
           .setDescription(`💰 Số tiền: **${amount.toLocaleString()} VND**`)
           .addFields(
-            { name: '🔗 LINK THANH TOÁN', value: `[Nhấn vào đây](${paymentData.checkoutUrl})`, inline: false },
+            // Đã lược bỏ trường link thanh toán
             { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true },
             { name: '🏦 Chuyển khoản tới', value: `${paymentData.accountName} - ${paymentData.accountNumber}`, inline: false },
             { name: '⏰ Hết hạn', value: '15 phút', inline: true }
           )
           .setImage(qrUrl)
-          .setFooter({ text: 'Quét QR hoặc bấm link để thanh toán. Bot sẽ tự cộng tiền sau 15-30 giây' })
+          .setFooter({ text: 'Quét QR để thanh toán. Bot sẽ tự cộng tiền sau 15-30 giây' })
           .setTimestamp();
         
         await interaction.editReply({ content: null, embeds: [embed] });
         
+        // Hẹn giờ tự xóa sau 5 phút (300.000 ms)
+        setTimeout(() => {
+          replyMsg.delete().catch(() => {});
+        }, 5 * 60 * 1000);
+        
       } catch (error) {
         console.error('PayOS error:', error);
         await interaction.editReply({ 
-          content: `❌ Lỗi: ${error.message}`,
-          ephemeral: true 
+          content: `❌ Lỗi: ${error.message}`
         });
+        setTimeout(() => {
+          replyMsg.delete().catch(() => {});
+        }, 15000); // Lỗi thì xóa sau 15s
       }
       return;
     }
@@ -476,6 +488,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton()) {
     const userId = interaction.user.id;
     
+    // Nút mở menu mệnh giá nạp (Tự xóa sau 5 phút)
     if (interaction.customId === 'nap_menu') {
       const embed = new EmbedBuilder()
         .setColor(0xFFA500)
@@ -483,7 +496,12 @@ client.on('interactionCreate', async interaction => {
         .setDescription('Chọn số tiền muốn nạp (tối thiểu **5,000đ**):')
         .setTimestamp();
       
-      await interaction.reply({ embeds: [embed], components: createNapMenu().components, ephemeral: true });
+      const replyMsg = await interaction.reply({ embeds: [embed], components: createNapMenu().components, fetchReply: true });
+      
+      // Hẹn giờ tự xóa sau 5 phút
+      setTimeout(() => {
+        replyMsg.delete().catch(() => {});
+      }, 5 * 60 * 1000);
       return;
     }
     
@@ -520,7 +538,7 @@ client.on('interactionCreate', async interaction => {
       return;
     }
     
-    // Nạp tiền có sẵn
+    // Các nút nạp tiền mệnh giá có sẵn (Tự xóa sau 5 phút, không gửi kèm link)
     if (interaction.customId.startsWith('nap_') && !interaction.customId.includes('custom') && interaction.customId !== 'nap_menu') {
       const amount = parseInt(interaction.customId.split('_')[1]);
       
@@ -528,7 +546,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '⚠️ Tối thiểu 5,000đ!', ephemeral: true });
       }
       
-      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, ephemeral: true });
+      const replyMsg = await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, fetchReply: true });
       
       try {
         const orderCode = Number(Date.now());
@@ -544,22 +562,29 @@ client.on('interactionCreate', async interaction => {
           .setTitle('🧧 NẠP TIỀN')
           .setDescription(`💰 Số tiền: **${amount.toLocaleString()} VND**`)
           .addFields(
-            { name: '🔗 LINK THANH TOÁN', value: `[Nhấn vào đây](${paymentData.checkoutUrl})`, inline: false },
+            // Đã lược bỏ trường link thanh toán
             { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true },
             { name: '🏦 Chuyển khoản tới', value: `${paymentData.accountName} - ${paymentData.accountNumber}`, inline: false }
           )
           .setImage(qrUrl)
-          .setFooter({ text: 'Quét QR hoặc bấm link để thanh toán' })
+          .setFooter({ text: 'Quét QR để thanh toán' })
           .setTimestamp();
         
         await interaction.editReply({ content: null, embeds: [embed] });
         
+        // Hẹn giờ tự xóa sau 5 phút
+        setTimeout(() => {
+          replyMsg.delete().catch(() => {});
+        }, 5 * 60 * 1000);
+        
       } catch (error) {
         console.error('PayOS error:', error);
         await interaction.editReply({ 
-          content: `❌ Lỗi: ${error.message}`,
-          ephemeral: true 
+          content: `❌ Lỗi: ${error.message}`
         });
+        setTimeout(() => {
+          replyMsg.delete().catch(() => {});
+        }, 15000);
       }
       return;
     }
