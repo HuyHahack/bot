@@ -272,15 +272,22 @@ async function handlePurchase(interaction, productType) {
   
   const balance = await db.getBalance(userId);
   if (balance < price) {
-    return interaction.reply({ 
-      content: `⚠️ Không đủ tiền! Cần ${price.toLocaleString()}đ, bạn có ${balance.toLocaleString()}đ\n💰 Hãy nạp tiền bằng nút NẠP TIỀN bên trên!`, 
-      ephemeral: true 
+    await interaction.editReply({ 
+      content: `⚠️ Không đủ tiền! Cần ${price.toLocaleString()}đ, bạn có ${balance.toLocaleString()}đ\n💰 Hãy nạp tiền bằng nút NẠP TIỀN bên trên!`
     });
+    setTimeout(() => {
+      interaction.deleteReply().catch(() => {});
+    }, 5 * 60 * 1000);
+    return;
   }
   
   const clone = await db.getAvailableClone(productType);
   if (!clone) {
-    return interaction.reply({ content: '❌ Sản phẩm này đã hết hàng! Vui lòng chờ admin nhập thêm.\n📞 Liên hệ Admin để được hỗ trợ!', ephemeral: true });
+    await interaction.editReply({ content: '❌ Sản phẩm này đã hết hàng! Vui lòng chờ admin nhập thêm.\n📞 Liên hệ Admin để được hỗ trợ!' });
+    setTimeout(() => {
+      interaction.deleteReply().catch(() => {});
+    }, 5 * 60 * 1000);
+    return;
   }
   
   const result = await db.deductBalance(userId, price, clone.id, productType);
@@ -300,10 +307,16 @@ async function handlePurchase(interaction, productType) {
       .setTimestamp();
     
     await user.send({ embeds: [embed] }).catch(() => null);
-    await interaction.reply({ content: `✅ Mua **${productName}** thành công! Đã gửi thông tin qua DM.`, ephemeral: true });
+    await interaction.editReply({ content: `✅ Mua **${productName}** thành công! Đã gửi thông tin qua DM.` });
     await updateMainMenu();
+    setTimeout(() => {
+      interaction.deleteReply().catch(() => {});
+    }, 5 * 60 * 1000);
   } else {
-    await interaction.reply({ content: '❌ Giao dịch thất bại! Vui lòng thử lại.', ephemeral: true });
+    await interaction.editReply({ content: '❌ Giao dịch thất bại! Vui lòng thử lại.' });
+    setTimeout(() => {
+      interaction.deleteReply().catch(() => {});
+    }, 5 * 60 * 1000);
   }
 }
 
@@ -363,6 +376,7 @@ client.on('interactionCreate', async interaction => {
 
       const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
       
+      // CHỈ CÓ tin nhắn này là công khai (ephemeral: false)
       const message = await interaction.reply({ embeds: [embed], components: [rowButton, rowSelect], fetchReply: true });
       mainMenuMessageId = message.id;
       mainMenuChannelId = message.channel.id;
@@ -377,6 +391,9 @@ client.on('interactionCreate', async interaction => {
       await db.addClone(type, email, password);
       await interaction.reply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!\n📧 ${email}\n🔑 ${password}`, ephemeral: true });
       await updateMainMenu();
+      setTimeout(() => {
+        interaction.deleteReply().catch(() => {});
+      }, 5 * 60 * 1000);
       return;
     }
     
@@ -391,6 +408,9 @@ client.on('interactionCreate', async interaction => {
         } else {
           await interaction.reply({ content: `❌ Không tìm thấy clone với ID \`${cloneId}\`!`, ephemeral: true });
         }
+        setTimeout(() => {
+          interaction.deleteReply().catch(() => {});
+        }, 5 * 60 * 1000);
       } else {
         await showRemoveCloneMenu(interaction);
       }
@@ -411,11 +431,14 @@ client.on('interactionCreate', async interaction => {
         .addFields({ name: '💎 Số dư mới', value: `${(await db.getBalance(targetUser.id)).toLocaleString()} VND` })
         .setTimestamp();
       await user.send({ embeds: [embed] }).catch(() => null);
+      setTimeout(() => {
+        interaction.deleteReply().catch(() => {});
+      }, 5 * 60 * 1000);
       return;
     }
   }
   
-  // SELECT MENU - Xử lý chọn sản phẩm
+  // SELECT MENU - Xử lý chọn sản phẩm (Riêng tư - Ephemeral)
   if (interaction.isStringSelectMenu()) {
     if (interaction.customId === 'product_select') {
       const selectedValue = interaction.values[0];
@@ -425,7 +448,7 @@ client.on('interactionCreate', async interaction => {
     }
   }
   
-  // MODAL - Nhập số tiền tùy chỉnh (Tự xóa sau 5 phút, không gửi kèm link)
+  // MODAL - Nhập số tiền tùy chỉnh (Riêng tư - Ephemeral, tự xóa sau 5 phút)
   if (interaction.isModalSubmit()) {
     if (interaction.customId === 'custom_amount_modal') {
       const amountStr = interaction.fields.getTextInputValue('custom_amount');
@@ -438,8 +461,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '⚠️ Tối đa 5,000,000đ!', ephemeral: true });
       }
       
-      // Trả lời công khai trong kênh để lấy đối tượng tin nhắn
-      const replyMsg = await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, fetchReply: true });
+      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, ephemeral: true });
       
       try {
         const orderCode = Number(Date.now());
@@ -455,7 +477,6 @@ client.on('interactionCreate', async interaction => {
           .setTitle('🧧 NẠP TIỀN')
           .setDescription(`💰 Số tiền: **${amount.toLocaleString()} VND**`)
           .addFields(
-            // Đã lược bỏ trường link thanh toán
             { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true },
             { name: '🏦 Chuyển khoản tới', value: `${paymentData.accountName} - ${paymentData.accountNumber}`, inline: false },
             { name: '⏰ Hết hạn', value: '15 phút', inline: true }
@@ -466,9 +487,9 @@ client.on('interactionCreate', async interaction => {
         
         await interaction.editReply({ content: null, embeds: [embed] });
         
-        // Hẹn giờ tự xóa sau 5 phút (300.000 ms)
+        // Hẹn giờ tự xóa sau 5 phút
         setTimeout(() => {
-          replyMsg.delete().catch(() => {});
+          interaction.deleteReply().catch(() => {});
         }, 5 * 60 * 1000);
         
       } catch (error) {
@@ -477,8 +498,8 @@ client.on('interactionCreate', async interaction => {
           content: `❌ Lỗi: ${error.message}`
         });
         setTimeout(() => {
-          replyMsg.delete().catch(() => {});
-        }, 15000); // Lỗi thì xóa sau 15s
+          interaction.deleteReply().catch(() => {});
+        }, 15000);
       }
       return;
     }
@@ -488,7 +509,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton()) {
     const userId = interaction.user.id;
     
-    // Nút mở menu mệnh giá nạp (Tự xóa sau 5 phút)
+    // Nút mở menu mệnh giá nạp (Riêng tư - Ephemeral, tự xóa sau 5 phút)
     if (interaction.customId === 'nap_menu') {
       const embed = new EmbedBuilder()
         .setColor(0xFFA500)
@@ -496,17 +517,17 @@ client.on('interactionCreate', async interaction => {
         .setDescription('Chọn số tiền muốn nạp (tối thiểu **5,000đ**):')
         .setTimestamp();
       
-      const replyMsg = await interaction.reply({ embeds: [embed], components: createNapMenu().components, fetchReply: true });
+      await interaction.reply({ embeds: [embed], components: createNapMenu().components, ephemeral: true });
       
       // Hẹn giờ tự xóa sau 5 phút
       setTimeout(() => {
-        replyMsg.delete().catch(() => {});
+        interaction.deleteReply().catch(() => {});
       }, 5 * 60 * 1000);
       return;
     }
     
     if (interaction.customId === 'back_to_main_menu') {
-      await interaction.message.delete().catch(() => {});
+      await interaction.deleteReply().catch(() => {});
       return;
     }
     
@@ -527,6 +548,7 @@ client.on('interactionCreate', async interaction => {
       return;
     }
     
+    // Xem số dư (Riêng tư - Ephemeral, tự xóa sau 5 phút)
     if (interaction.customId === 'view_balance') {
       const balance = await db.getBalance(userId);
       const embed = new EmbedBuilder()
@@ -535,10 +557,13 @@ client.on('interactionCreate', async interaction => {
         .setDescription(`**${balance.toLocaleString()} VND**`)
         .setTimestamp();
       await interaction.reply({ embeds: [embed], ephemeral: true });
+      setTimeout(() => {
+        interaction.deleteReply().catch(() => {});
+      }, 5 * 60 * 1000);
       return;
     }
     
-    // Các nút nạp tiền mệnh giá có sẵn (Tự xóa sau 5 phút, không gửi kèm link)
+    // Các nút nạp tiền mệnh giá có sẵn (Riêng tư - Ephemeral, tự xóa sau 5 phút)
     if (interaction.customId.startsWith('nap_') && !interaction.customId.includes('custom') && interaction.customId !== 'nap_menu') {
       const amount = parseInt(interaction.customId.split('_')[1]);
       
@@ -546,7 +571,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '⚠️ Tối thiểu 5,000đ!', ephemeral: true });
       }
       
-      const replyMsg = await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, fetchReply: true });
+      await interaction.reply({ content: `🔄 Đang tạo mã thanh toán ${amount.toLocaleString()} VND...`, ephemeral: true });
       
       try {
         const orderCode = Number(Date.now());
@@ -562,7 +587,6 @@ client.on('interactionCreate', async interaction => {
           .setTitle('🧧 NẠP TIỀN')
           .setDescription(`💰 Số tiền: **${amount.toLocaleString()} VND**`)
           .addFields(
-            // Đã lược bỏ trường link thanh toán
             { name: '📝 Nội dung CK', value: `\`${description}\``, inline: true },
             { name: '🏦 Chuyển khoản tới', value: `${paymentData.accountName} - ${paymentData.accountNumber}`, inline: false }
           )
@@ -574,7 +598,7 @@ client.on('interactionCreate', async interaction => {
         
         // Hẹn giờ tự xóa sau 5 phút
         setTimeout(() => {
-          replyMsg.delete().catch(() => {});
+          interaction.deleteReply().catch(() => {});
         }, 5 * 60 * 1000);
         
       } catch (error) {
@@ -583,7 +607,7 @@ client.on('interactionCreate', async interaction => {
           content: `❌ Lỗi: ${error.message}`
         });
         setTimeout(() => {
-          replyMsg.delete().catch(() => {});
+          interaction.deleteReply().catch(() => {});
         }, 15000);
       }
       return;
