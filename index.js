@@ -25,7 +25,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessages] 
 });
 
-// Giá sản phẩm
+// Giá sản phẩm (Giữ nguyên giá gốc của bạn)
 const PRICES = { 'lv5': 2500, 'kc7d': 30000, 'kcvv': 40000 };
 const PRODUCT_NAMES = { 'lv5': '🎮 Clone Level 5', 'kc7d': '⚡ Clone Rank KC (7 ngày)', 'kcvv': '💎 Clone Rank KC (Vĩnh viễn)' };
 const ADMIN_IDS = ['1507070505319006380']; // Thay ID admin của bạn
@@ -136,47 +136,56 @@ async function updateMainMenu() {
   try {
     const message = await channel.messages.fetch(mainMenuMessageId);
     const stats = await db.getAllProductsByType();
-    const embed = new EmbedBuilder()
-      .setColor(0x00FF00)
-      .setTitle('🏪 CỬA HÀNG BÁN CLONE')
-      .setDescription(`📋 **Bảng giá:**\n• 🎮 Clone Level 5: **2,500đ**\n• ⚡ Clone Rank KC (7 ngày): **30,000đ**\n• 💎 Clone Rank KC (Vĩnh viễn): **40,000đ**\n\n📦 **Tồn kho:**\n• Level 5: **${stats.lv5 || 0}** cái\n• KC 7 ngày: **${stats.kc7d || 0}** cái\n• KC Vĩnh viễn: **${stats.kcvv || 0}** cái\n\n📞 **Hỗ trợ:** Liên hệ <@1507070505319006380> nếu có vấn đề!`)
-      .setFooter({ text: 'Mọi thắc mắc liên hệ Admin' })
-      .setTimestamp();
     
-    // Tạo Select Menu thả xuống
+    const embed = new EmbedBuilder()
+      .setColor(0xFF0000) // Viền đỏ giống ảnh minh họa
+      .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
+      .setTitle('Chào mừng đến với Acc Clone Faifai')
+      .setDescription(
+        `💰 **Nạp tiền** để mua hàng\n` +
+        `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
+        `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
+        `🟩 **Acc Clone Rank KC:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n\n` +
+        `⚠️ **Lưu ý quan trọng:**\n` +
+        `Yêu cầu quay video khi mua và login luôn\n` +
+        `ngay sau khi vừa mua để làm bằng chứng.\n` +
+        `Không có video sẽ không giải quyết khiếu nại!\n\n` +
+        `**Hỗ trợ :** <@1507070505319006380>`
+      )
+      .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
+      .setFooter({ text: 'Hệ thống bán Acc tự động' });
+    
+    // Nút bấm Nạp tiền (Xanh lá) và Số dư (Xám) xếp thành một dòng
+    const rowButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('nap_menu').setLabel('💰 Nạp tiền').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('view_balance').setLabel('📊 Số dư').setStyle(ButtonStyle.Secondary)
+    );
+
+    // Menu chọn sản phẩm
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId('product_select')
-      .setPlaceholder('🎁 Chọn sản phẩm bạn muốn mua...')
+      .setPlaceholder('🛒 | Chọn sản phẩm để mua')
       .addOptions([
         new StringSelectMenuOptionBuilder()
           .setLabel('🎮 Clone Level 5')
-          .setDescription('Giá: 2,500đ')
+          .setDescription(`Giá: ${(PRICES.lv5).toLocaleString()}đ`)
           .setValue('lv5')
           .setEmoji('🎮'),
         new StringSelectMenuOptionBuilder()
           .setLabel('⚡ Clone Rank KC (7 ngày)')
-          .setDescription('Giá: 30,000đ')
+          .setDescription(`Giá: ${(PRICES.kc7d).toLocaleString()}đ`)
           .setValue('kc7d')
           .setEmoji('⚡'),
         new StringSelectMenuOptionBuilder()
           .setLabel('💎 Clone Rank KC (Vĩnh viễn)')
-          .setDescription('Giá: 40,000đ')
+          .setDescription(`Giá: ${(PRICES.kcvv).toLocaleString()}đ`)
           .setValue('kcvv')
           .setEmoji('💎')
       ]);
     
-    const row1 = new ActionRowBuilder().addComponents(selectMenu);
+    const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
     
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('nap_menu').setLabel('💰 NẠP TIỀN').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId('view_balance').setLabel('💎 XEM SỐ DƯ').setStyle(ButtonStyle.Primary)
-    );
-    
-    const row3 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('show_help').setLabel('❓ HƯỚNG DẪN').setStyle(ButtonStyle.Secondary)
-    );
-    
-    await message.edit({ embeds: [embed], components: [row1, row2, row3] });
+    await message.edit({ embeds: [embed], components: [rowButton, rowSelect] });
   } catch (error) { console.error('Update menu error:', error); }
 }
 
@@ -305,31 +314,52 @@ client.on('interactionCreate', async interaction => {
       }
       const stats = await db.getAllProductsByType();
       const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('🏪 CỬA HÀNG BÁN CLONE')
-        .setDescription(`📋 **Bảng giá:**\n• 🎮 Clone Level 5: **2,500đ**\n• ⚡ Clone Rank KC (7 ngày): **30,000đ**\n• 💎 Clone Rank KC (Vĩnh viễn): **40,000đ**\n\n📦 **Tồn kho:**\n• Level 5: **${stats.lv5 || 0}** cái\n• KC 7 ngày: **${stats.kc7d || 0}** cái\n• KC Vĩnh viễn: **${stats.kcvv || 0}** cái\n\n📞 **Hỗ trợ:** Liên hệ <@1507070505319006380> nếu có vấn đề!`)
-        .setFooter({ text: 'Mọi thắc mắc liên hệ Admin' })
-        .setTimestamp();
+        .setColor(0xFF0000) // Màu đỏ
+        .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
+        .setTitle('Chào mừng đến với Acc Clone Faifai')
+        .setDescription(
+          `💰 **Nạp tiền** để mua hàng\n` +
+          `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
+          `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
+          `🟩 **Acc Clone Rank KC:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n\n` +
+          `⚠️ **Lưu ý quan trọng:**\n` +
+          `Yêu cầu quay video khi mua và login luôn\n` +
+          `ngay sau khi vừa mua để làm bằng chứng.\n` +
+          `Không có video sẽ không giải quyết khiếu nại!\n\n` +
+          `**Hỗ trợ :** <@1507070505319006380>`
+        )
+        .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
+        .setFooter({ text: 'Hệ thống bán Acc tự động' });
       
       const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('product_select')
-        .setPlaceholder('🎁 Chọn sản phẩm bạn muốn mua...')
+        .setPlaceholder('🛒 | Chọn sản phẩm để mua')
         .addOptions([
-          new StringSelectMenuOptionBuilder().setLabel('🎮 Clone Level 5').setDescription('Giá: 2,500đ').setValue('lv5'),
-          new StringSelectMenuOptionBuilder().setLabel('⚡ Clone Rank KC (7 ngày)').setDescription('Giá: 30,000đ').setValue('kc7d'),
-          new StringSelectMenuOptionBuilder().setLabel('💎 Clone Rank KC (Vĩnh viễn)').setDescription('Giá: 40,000đ').setValue('kcvv')
+          new StringSelectMenuOptionBuilder()
+            .setLabel('🎮 Clone Level 5')
+            .setDescription(`Giá: ${(PRICES.lv5).toLocaleString()}đ`)
+            .setValue('lv5')
+            .setEmoji('🎮'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('⚡ Clone Rank KC (7 ngày)')
+            .setDescription(`Giá: ${(PRICES.kc7d).toLocaleString()}đ`)
+            .setValue('kc7d')
+            .setEmoji('⚡'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('💎 Clone Rank KC (Vĩnh viễn)')
+            .setDescription(`Giá: ${(PRICES.kcvv).toLocaleString()}đ`)
+            .setValue('kcvv')
+            .setEmoji('💎')
         ]);
       
-      const row1 = new ActionRowBuilder().addComponents(selectMenu);
-      const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('nap_menu').setLabel('💰 NẠP TIỀN').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('view_balance').setLabel('💎 XEM SỐ DƯ').setStyle(ButtonStyle.Primary)
+      const rowButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('nap_menu').setLabel('💰 Nạp tiền').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('view_balance').setLabel('📊 Số dư').setStyle(ButtonStyle.Secondary)
       );
-      const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('show_help').setLabel('❓ HƯỚNG DẪN').setStyle(ButtonStyle.Secondary)
-      );
+
+      const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
       
-      const message = await interaction.reply({ embeds: [embed], components: [row1, row2, row3], fetchReply: true });
+      const message = await interaction.reply({ embeds: [embed], components: [rowButton, rowSelect], fetchReply: true });
       mainMenuMessageId = message.id;
       mainMenuChannelId = message.channel.id;
       return;
@@ -485,16 +515,6 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x00FF00)
         .setTitle('💰 SỐ DƯ TÀI KHOẢN')
         .setDescription(`**${balance.toLocaleString()} VND**`)
-        .setTimestamp();
-      await interaction.reply({ embeds: [embed], ephemeral: true });
-      return;
-    }
-    
-    if (interaction.customId === 'show_help') {
-      const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle('📖 HƯỚNG DẪN')
-        .setDescription('**Cách mua hàng:**\n1️⃣ Mở menu thả xuống 🎁\n2️⃣ Chọn sản phẩm muốn mua\n3️⃣ Xác nhận\n4️⃣ Nhận thông tin qua DM\n\n**Cách nạp tiền:**\n1️⃣ Nhấn NẠP TIỀN\n2️⃣ Chọn số tiền\n3️⃣ Quét QR hoặc bấm link\n4️⃣ Chuyển khoản\n5️⃣ Đợi 15-30 giây cộng tiền\n\n**Hỗ trợ:** Liên hệ Admin nếu có vấn đề!')
         .setTimestamp();
       await interaction.reply({ embeds: [embed], ephemeral: true });
       return;
