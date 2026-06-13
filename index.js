@@ -7,6 +7,8 @@ require('dotenv/config');
 
 // ============ CHECK ENVIRONMENT ============
 console.log('\n🔐 ========== CHECKING ENV ==========');
+console.log('Node.js version:', process.version);
+console.log('DISCORD_TOKEN length:', process.env.DISCORD_TOKEN?.length || 0);
 console.log('PAYOS_CLIENT_ID:', process.env.PAYOS_CLIENT_ID ? '✅' : '❌');
 console.log('PAYOS_API_KEY:', process.env.PAYOS_API_KEY ? '✅' : '❌');
 console.log('PAYOS_CHECKSUM_KEY length:', process.env.PAYOS_CHECKSUM_KEY?.length || 0);
@@ -25,7 +27,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessages] 
 });
 
-// Giá sản phẩm
+// Giá sản phẩm (Không đổi giá của bạn)
 const PRICES = { 'lv5': 2500, 'kc7d': 30000, 'kcvv': 40000, 'kclogx': 40000 };
 const PRODUCT_NAMES = { 
   'lv5': '🎮 Clone Level 5', 
@@ -144,7 +146,7 @@ async function updateMainMenu() {
     const stats = await db.getAllProductsByType();
     
     const embed = new EmbedBuilder()
-      .setColor(0xFF0000)
+      .setColor(0xFF0000) // Viền đỏ giống ảnh minh họa
       .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
       .setTitle('Chào mừng đến với Acc Clone Faifai')
       .setDescription(
@@ -160,7 +162,7 @@ async function updateMainMenu() {
         `Không có video sẽ không giải quyết khiếu nại!\n\n` +
         `**Hỗ trợ :** <@1481952195468460135>`
       )
-      .setThumbnail('https://tenor.com/view/cat-tongue-cat-cats-ahh-excited-gif-11052788973622876130')
+      .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
       .setFooter({ text: 'Hệ thống bán Acc tự động' });
     
     const rowButton = new ActionRowBuilder().addComponents(
@@ -343,7 +345,7 @@ client.on('interactionCreate', async interaction => {
       try {
         const stats = await db.getAllProductsByType();
         const embed = new EmbedBuilder()
-          .setColor(0xFF0000)
+          .setColor(0xFF0000) // Màu đỏ
           .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
           .setTitle('Chào mừng đến với Acc Clone Faifai')
           .setDescription(
@@ -359,7 +361,7 @@ client.on('interactionCreate', async interaction => {
             `Không có video sẽ không giải quyết khiếu nại!\n\n` +
             `**Hỗ trợ :** <@1481952195468460135>`
           )
-          .setThumbnail('https://tenor.com/view/cat-tongue-cat-cats-ahh-excited-gif-11052788973622876130')
+          .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
           .setFooter({ text: 'Hệ thống bán Acc tự động' });
         
         const selectMenu = new StringSelectMenuBuilder()
@@ -672,4 +674,10 @@ client.on('interactionCreate', async interaction => {
 });
 
 process.on('unhandledRejection', (error) => console.error('Unhandled rejection:', error));
-client.login(process.env.DISCORD_TOKEN);
+
+// Đăng nhập bot kèm theo hàm bắt lỗi (catch) chi tiết
+client.login(process.env.DISCORD_TOKEN).catch(error => {
+  console.error('\n❌ LỖI ĐĂNG NHẬP BOT DISCORD:');
+  console.error(error);
+  console.error('=====================================\n');
+});
