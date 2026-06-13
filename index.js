@@ -45,8 +45,9 @@ const pendingPayments = new Map();
 let mainMenuMessageId = null;
 let mainMenuChannelId = null;
 
-// Lưu trữ ID tin nhắn hết hàng gần nhất trong bộ nhớ đệm (Key: loại acc, Value: ID tin nhắn)
-const outOfStockMessages = new Map();
+// Bộ nhớ đệm quản lý ID tin nhắn thông báo (Key: loại acc, Value: ID tin nhắn)
+const inStockMessages = new Map();   // Lưu ID tin nhắn "Đã thêm"
+const outOfStockMessages = new Map(); // Lưu ID tin nhắn "Đã hết"
 
 // ============ PAYOS API V2 ============
 const PAYOS_API_URL = 'https://api-merchant.payos.vn';
@@ -354,13 +355,22 @@ async function handlePurchase(interaction, productType) {
       if (remaining === 0) {
         const pingChannel = await client.channels.fetch(PING_CHANNEL_ID).catch(() => null);
         if (pingChannel) {
-          // Xóa tin nhắn hết hàng cũ của loại acc này nếu có
+          // 1. Tìm và xóa chính xác tin nhắn báo "Đã thêm" tương ứng của loại acc này
+          const inStockMsgId = inStockMessages.get(productType);
+          if (inStockMsgId) {
+            const inStockMsg = await pingChannel.messages.fetch(inStockMsgId).catch(() => null);
+            if (inStockMsg) await inStockMsg.delete().catch(() => {});
+            inStockMessages.delete(productType);
+          }
+
+          // 2. Xóa tin nhắn hết hàng cũ của loại acc này nếu có (tránh bị spam nhiều tin hết hàng liên tiếp)
           const oldMsgId = outOfStockMessages.get(productType);
           if (oldMsgId) {
             const oldMsg = await pingChannel.messages.fetch(oldMsgId).catch(() => null);
             if (oldMsg) await oldMsg.delete().catch(() => {});
           }
-          // Gửi tin nhắn mới và lưu ID
+
+          // 3. Gửi tin nhắn hết hàng mới và lưu ID
           const newMsg = await pingChannel.send(`@everyone đã hết acc **${productName}**`).catch(() => null);
           if (newMsg) outOfStockMessages.set(productType, newMsg.id);
         }
@@ -467,10 +477,22 @@ client.on('interactionCreate', async interaction => {
         await db.addClone(type, email, password);
         await interaction.editReply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!\n📧 ${email}\n🔑 ${password}` });
 
-        // --- GỬI PING THÔNG BÁO THÊM ACC MỚI ---
-        const pingChannel = await client.channels.fetch(PING_CHANNEL_ID).catch(() => null);
-        if (pingChannel) {
-          await pingChannel.send(`@everyone Đã thêm acc **${PRODUCT_NAMES[type]}**`).catch(() => {});
+        // --- GỬI PING THÔNG BÁO THÊM ACC MỚI (Ngoại trừ LV5) ---
+        if (type !== 'lv5') {
+          const pingChannel = await client.channels.fetch(PING_CHANNEL_ID).catch(() => null);
+          if (pingChannel) {
+            // Xóa tin nhắn báo "Đã hết" trước đó của loại acc này (nếu có) để dọn dẹp kênh
+            const oldOutOfStockId = outOfStockMessages.get(type);
+            if (oldOutOfStockId) {
+              const oldMsg = await pingChannel.messages.fetch(oldOutOfStockId).catch(() => null);
+              if (oldMsg) await oldMsg.delete().catch(() => {});
+              outOfStockMessages.delete(type);
+            }
+
+            // Gửi tin nhắn báo "Đã thêm" mới và lưu ID
+            const newMsg = await pingChannel.send(`@everyone Đã thêm acc **${PRODUCT_NAMES[type]}**`).catch(() => null);
+            if (newMsg) inStockMessages.set(type, newMsg.id);
+          }
         }
 
         await updateMainMenu();
