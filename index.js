@@ -25,7 +25,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessages] 
 });
 
-// Giá sản phẩm (Thêm kclogx giá 40,000đ)
+// Giá sản phẩm
 const PRICES = { 'lv5': 2500, 'kc7d': 30000, 'kcvv': 40000, 'kclogx': 40000 };
 const PRODUCT_NAMES = { 
   'lv5': '🎮 Clone Level 5', 
@@ -33,7 +33,7 @@ const PRODUCT_NAMES = {
   'kcvv': '💎 Clone KC Mail Vĩnh viễn',
   'kclogx': '🐦 Clone KC Log X'
 };
-const ADMIN_IDS = ['1481952195468460135']; // Thay ID admin của bạn
+const ADMIN_IDS = ['1481952195468460135']; // ID admin của bạn
 
 const pendingPayments = new Map();
 let mainMenuMessageId = null;
@@ -144,7 +144,7 @@ async function updateMainMenu() {
     const stats = await db.getAllProductsByType();
     
     const embed = new EmbedBuilder()
-      .setColor(0xFF0000) // Viền đỏ giống ảnh minh họa
+      .setColor(0xFF0000)
       .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
       .setTitle('Chào mừng đến với Acc Clone Faifai')
       .setDescription(
@@ -217,13 +217,13 @@ function createNapMenu() {
   return { components: [row1, row2, row3] };
 }
 
-// Hiển thị danh sách clone để xóa
+// Hiển thị danh sách clone để xóa (Đã hỗ trợ Defer)
 async function showRemoveCloneMenu(interaction) {
   const clones = await db.getAllClones();
   const availableClones = clones.filter(c => c.status === 'available');
   
   if (availableClones.length === 0) {
-    return interaction.reply({ content: '📦 Không có clone nào trong kho!', ephemeral: true });
+    return interaction.editReply({ content: '📦 Không có clone nào trong kho!' });
   }
   
   const grouped = { lv5: [], kc7d: [], kcvv: [], kclogx: [] };
@@ -239,7 +239,7 @@ async function showRemoveCloneMenu(interaction) {
   description += '\n💡 **Cách xóa:** Gõ `/removeclone id:<ID>` để xóa clone theo ID';
   
   const embed = new EmbedBuilder().setColor(0xFF6600).setTitle('🗑️ QUẢN LÝ CLONE').setDescription(description).setTimestamp();
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.editReply({ embeds: [embed] });
 }
 
 setInterval(async () => {
@@ -336,74 +336,91 @@ client.on('interactionCreate', async interaction => {
       if (!ADMIN_IDS.includes(interaction.user.id)) {
         return interaction.reply({ content: '❌ Bạn không có quyền!', ephemeral: true });
       }
-      const stats = await db.getAllProductsByType();
-      const embed = new EmbedBuilder()
-        .setColor(0xFF0000) // Màu đỏ
-        .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
-        .setTitle('Chào mừng đến với Acc Clone Faifai')
-        .setDescription(
-          `💰 **Nạp tiền** để mua hàng\n` +
-          `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
-          `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
-          `🟩 **Acc Clone KC Mail 7 ngày:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
-          `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n` +
-          `🐦 **Acc Clone KC Log X:** \`${(PRICES.kclogx).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kclogx || 0}\`\n\n` +
-          `⚠️ **Lưu ý quan trọng:**\n` +
-          `Yêu cầu quay video khi mua và login luôn\n` +
-          `ngay sau khi vừa mua để làm bằng chứng.\n` +
-          `Không có video sẽ không giải quyết khiếu nại!\n\n` +
-          `**Hỗ trợ :** <@1481952195468460135>`
-        )
-        .setThumbnail('https://tenor.com/view/cat-tongue-cat-cats-ahh-excited-gif-11052788973622876130')
-        .setFooter({ text: 'Hệ thống bán Acc tự động' });
       
-      const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('product_select')
-        .setPlaceholder('🛒 | Chọn sản phẩm để mua')
-        .addOptions([
-          new StringSelectMenuOptionBuilder()
-            .setLabel('🎮 Clone Level 5')
-            .setDescription(`Giá: ${(PRICES.lv5).toLocaleString()}đ`)
-            .setValue('lv5')
-            .setEmoji('🎮'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('⚡ Clone KC Mail 7 ngày')
-            .setDescription(`Giá: ${(PRICES.kc7d).toLocaleString()}đ`)
-            .setValue('kc7d')
-            .setEmoji('⚡'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('💎 Clone KC Mail Vĩnh viễn')
-            .setDescription(`Giá: ${(PRICES.kcvv).toLocaleString()}đ`)
-            .setValue('kcvv')
-            .setEmoji('💎'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('🐦 Clone KC Log X')
-            .setDescription(`Giá: ${(PRICES.kclogx).toLocaleString()}đ`)
-            .setValue('kclogx')
-            .setEmoji('🐦')
-        ]);
+      // Hoãn phản hồi (defer) để tránh lỗi timeout 3 giây [1]
+      await interaction.deferReply({ ephemeral: false });
       
-      const rowButton = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('nap_menu').setLabel('💰 Nạp tiền').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('view_balance').setLabel('📊 Số dư').setStyle(ButtonStyle.Secondary)
-      );
+      try {
+        const stats = await db.getAllProductsByType();
+        const embed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
+          .setTitle('Chào mừng đến với Acc Clone Faifai')
+          .setDescription(
+            `💰 **Nạp tiền** để mua hàng\n` +
+            `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
+            `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
+            `🟩 **Acc Clone KC Mail 7 ngày:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
+            `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n` +
+            `🐦 **Acc Clone KC Log X:** \`${(PRICES.kclogx).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kclogx || 0}\`\n\n` +
+            `⚠️ **Lưu ý quan trọng:**\n` +
+            `Yêu cầu quay video khi mua và login luôn\n` +
+            `ngay sau khi vừa mua để làm bằng chứng.\n` +
+            `Không có video sẽ không giải quyết khiếu nại!\n\n` +
+            `**Hỗ trợ :** <@1481952195468460135>`
+          )
+          .setThumbnail('https://tenor.com/view/cat-tongue-cat-cats-ahh-excited-gif-11052788973622876130')
+          .setFooter({ text: 'Hệ thống bán Acc tự động' });
+        
+        const selectMenu = new StringSelectMenuBuilder()
+          .setCustomId('product_select')
+          .setPlaceholder('🛒 | Chọn sản phẩm để mua')
+          .addOptions([
+            new StringSelectMenuOptionBuilder()
+              .setLabel('🎮 Clone Level 5')
+              .setDescription(`Giá: ${(PRICES.lv5).toLocaleString()}đ`)
+              .setValue('lv5')
+              .setEmoji('🎮'),
+            new StringSelectMenuOptionBuilder()
+              .setLabel('⚡ Clone KC Mail 7 ngày')
+              .setDescription(`Giá: ${(PRICES.kc7d).toLocaleString()}đ`)
+              .setValue('kc7d')
+              .setEmoji('⚡'),
+            new StringSelectMenuOptionBuilder()
+              .setLabel('💎 Clone KC Mail Vĩnh viễn')
+              .setDescription(`Giá: ${(PRICES.kcvv).toLocaleString()}đ`)
+              .setValue('kcvv')
+              .setEmoji('💎'),
+            new StringSelectMenuOptionBuilder()
+              .setLabel('🐦 Clone KC Log X')
+              .setDescription(`Giá: ${(PRICES.kclogx).toLocaleString()}đ`)
+              .setValue('kclogx')
+              .setEmoji('🐦')
+          ]);
+        
+        const rowButton = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('nap_menu').setLabel('💰 Nạp tiền').setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId('view_balance').setLabel('📊 Số dư').setStyle(ButtonStyle.Secondary)
+        );
 
-      const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
-      
-      const message = await interaction.reply({ embeds: [embed], components: [rowButton, rowSelect], fetchReply: true });
-      mainMenuMessageId = message.id;
-      mainMenuChannelId = message.channel.id;
+        const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
+        
+        const message = await interaction.editReply({ embeds: [embed], components: [rowButton, rowSelect] });
+        mainMenuMessageId = message.id;
+        mainMenuChannelId = message.channel.id;
+      } catch (error) {
+        console.error('Lỗi khởi động start:', error);
+        await interaction.editReply({ content: '❌ Đã có lỗi xảy ra khi tải dữ liệu!' });
+      }
       return;
     }
     
     if (interaction.commandName === 'addclone') {
       if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Không có quyền!', ephemeral: true });
-      const type = interaction.options.getString('type');
-      const email = interaction.options.getString('email');
-      const password = interaction.options.getString('password');
-      await db.addClone(type, email, password);
-      await interaction.reply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!\n📧 ${email}\n🔑 ${password}`, ephemeral: true });
-      await updateMainMenu();
+      await interaction.deferReply({ ephemeral: true });
+      
+      try {
+        const type = interaction.options.getString('type');
+        const email = interaction.options.getString('email');
+        const password = interaction.options.getString('password');
+        await db.addClone(type, email, password);
+        await interaction.editReply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!\n📧 ${email}\n🔑 ${password}` });
+        await updateMainMenu();
+      } catch (error) {
+        console.error(error);
+        await interaction.editReply({ content: '❌ Không thể thêm tài khoản vào cơ sở dữ liệu.' });
+      }
+      
       setTimeout(() => {
         interaction.deleteReply().catch(() => {});
       }, 5 * 60 * 1000);
@@ -412,38 +429,56 @@ client.on('interactionCreate', async interaction => {
     
     if (interaction.commandName === 'removeclone') {
       if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Không có quyền!', ephemeral: true });
-      const cloneId = interaction.options.getInteger('id');
-      if (cloneId) {
-        const removed = await db.removeCloneById(cloneId);
-        if (removed) {
-          await interaction.reply({ content: `✅ Đã xóa clone ID \`${cloneId}\` (${removed.email}) khỏi kho!`, ephemeral: true });
-          await updateMainMenu();
+      await interaction.deferReply({ ephemeral: true });
+      
+      try {
+        const cloneId = interaction.options.getInteger('id');
+        if (cloneId) {
+          const removed = await db.removeCloneById(cloneId);
+          if (removed) {
+            await interaction.editReply({ content: `✅ Đã xóa clone ID \`${cloneId}\` (${removed.email}) khỏi kho!` });
+            await updateMainMenu();
+          } else {
+            await interaction.editReply({ content: `❌ Không tìm thấy clone với ID \`${cloneId}\`!` });
+          }
         } else {
-          await interaction.reply({ content: `❌ Không tìm thấy clone với ID \`${cloneId}\`!`, ephemeral: true });
+          await showRemoveCloneMenu(interaction);
         }
-        setTimeout(() => {
-          interaction.deleteReply().catch(() => {});
-        }, 5 * 60 * 1000);
-      } else {
-        await showRemoveCloneMenu(interaction);
+      } catch (error) {
+        console.error(error);
+        await interaction.editReply({ content: '❌ Không thể thực hiện thao tác xóa.' });
       }
+      
+      setTimeout(() => {
+        interaction.deleteReply().catch(() => {});
+      }, 5 * 60 * 1000);
       return;
     }
     
     if (interaction.commandName === 'addmoney') {
       if (!ADMIN_IDS.includes(interaction.user.id)) return interaction.reply({ content: '❌ Không có quyền!', ephemeral: true });
-      const targetUser = interaction.options.getUser('user');
-      const amount = interaction.options.getInteger('amount');
-      await db.addBalance(targetUser.id, amount, null);
-      await interaction.reply({ content: `✅ Đã cộng **${amount.toLocaleString()} VND** cho ${targetUser.username}!`, ephemeral: true });
-      const user = await client.users.fetch(targetUser.id);
-      const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('💰 NẠP TIỀN THÀNH CÔNG')
-        .setDescription(`Admin đã cộng **${amount.toLocaleString()} VND** vào tài khoản.`)
-        .addFields({ name: '💎 Số dư mới', value: `${(await db.getBalance(targetUser.id)).toLocaleString()} VND` })
-        .setTimestamp();
-      await user.send({ embeds: [embed] }).catch(() => null);
+      await interaction.deferReply({ ephemeral: true });
+      
+      try {
+        const targetUser = interaction.options.getUser('user');
+        const amount = interaction.options.getInteger('amount');
+        await db.addBalance(targetUser.id, amount, null);
+        await interaction.editReply({ content: `✅ Đã cộng **${amount.toLocaleString()} VND** cho ${targetUser.username}!` });
+        const user = await client.users.fetch(targetUser.id).catch(() => null);
+        if (user) {
+          const embed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('💰 NẠP TIỀN THÀNH CÔNG')
+            .setDescription(`Admin đã cộng **${amount.toLocaleString()} VND** vào tài khoản.`)
+            .addFields({ name: '💎 Số dư mới', value: `${(await db.getBalance(targetUser.id)).toLocaleString()} VND` })
+            .setTimestamp();
+          await user.send({ embeds: [embed] }).catch(() => null);
+        }
+      } catch (error) {
+        console.error(error);
+        await interaction.editReply({ content: '❌ Thất bại khi thực hiện cộng tiền.' });
+      }
+      
       setTimeout(() => {
         interaction.deleteReply().catch(() => {});
       }, 5 * 60 * 1000);
@@ -561,15 +596,23 @@ client.on('interactionCreate', async interaction => {
       return;
     }
     
-    // Xem số dư (Riêng tư - Ephemeral, tự xóa sau 5 phút)
+    // Xem số dư (Riêng tư - Ephemeral, tự xóa sau 5 phút) (Đã hỗ trợ Defer)
     if (interaction.customId === 'view_balance') {
-      const balance = await db.getBalance(userId);
-      const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle('💰 SỐ DƯ TÀI KHOẢN')
-        .setDescription(`**${balance.toLocaleString()} VND**`)
-        .setTimestamp();
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.deferReply({ ephemeral: true });
+      
+      try {
+        const balance = await db.getBalance(userId);
+        const embed = new EmbedBuilder()
+          .setColor(0x00FF00)
+          .setTitle('💰 SỐ DƯ TÀI KHOẢN')
+          .setDescription(`**${balance.toLocaleString()} VND**`)
+          .setTimestamp();
+        await interaction.editReply({ embeds: [embed] });
+      } catch (error) {
+        console.error(error);
+        await interaction.editReply({ content: '❌ Không thể tải thông tin số dư vào lúc này.' });
+      }
+      
       setTimeout(() => {
         interaction.deleteReply().catch(() => {});
       }, 5 * 60 * 1000);
