@@ -37,9 +37,16 @@ const PRODUCT_NAMES = {
 };
 const ADMIN_IDS = ['1481952195468460135']; // ID admin của bạn
 
+// Cấu hình ID kênh hệ thống
+const PING_CHANNEL_ID = '1515052684342726857';
+const BILL_CHANNEL_ID = '1515318710032928778';
+
 const pendingPayments = new Map();
 let mainMenuMessageId = null;
 let mainMenuChannelId = null;
+
+// Lưu trữ ID tin nhắn hết hàng gần nhất trong bộ nhớ đệm (Key: loại acc, Value: ID tin nhắn)
+const outOfStockMessages = new Map();
 
 // ============ PAYOS API V2 ============
 const PAYOS_API_URL = 'https://api-merchant.payos.vn';
@@ -126,8 +133,21 @@ client.once('ready', async () => {
   console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
   
   try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commands.map(cmd => cmd.toJSON()) });
-    console.log('✅ Slash commands registered!');
+    // Nếu có biến GUILD_ID trong Render, bot sẽ nạp lệnh ăn ngay lập tức cho server đó [4]
+    if (process.env.GUILD_ID) {
+      await rest.put(
+        Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID.trim()),
+        { body: commands.map(cmd => cmd.toJSON()) }
+      );
+      console.log(`✅ Slash commands registered instantly for Guild: ${process.env.GUILD_ID}`);
+    } else {
+      // Ngược lại nếu không có, bot sẽ nạp toàn cầu (chờ 1 tiếng)
+      await rest.put(
+        Routes.applicationCommands(client.user.id),
+        { body: commands.map(cmd => cmd.toJSON()) }
+      );
+      console.log('✅ Slash commands registered globally!');
+    }
   } catch (error) {
     console.error('❌ Error registering commands:', error);
   }
@@ -318,6 +338,35 @@ async function handlePurchase(interaction, productType) {
     
     await user.send({ embeds: [embed] }).catch(() => null);
     await interaction.editReply({ content: `✅ Mua **${productName}** thành công! Đã gửi thông tin qua DM.` });
+
+    // --- GỬI HÓA ĐƠN ĐẾN KÊNH BILL ---
+    const billChannel = await client.channels.fetch(BILL_CHANNEL_ID).catch(() => null);
+    if (billChannel) {
+      const now = new Date();
+      const vnTime = now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+      await billChannel.send(`Cảm ơn <@${userId}> đã mua **${productName}** của chúng tôi! Chúc 1 ngày tốt lành! (Mua lúc: \`${vnTime}\`)`).catch(() => {});
+    }
+
+    // --- KIỂM TRA HẾT HÀNG (Anti Out of Stock Ping - Ngoại trừ LV5) ---
+    if (productType !== 'lv5') {
+      const stats = await db.getAllProductsByType().catch(() => ({}));
+      const remaining = stats[productType] || 0;
+      if (remaining === 0) {
+        const pingChannel = await client.channels.fetch(PING_CHANNEL_ID).catch(() => null);
+        if (pingChannel) {
+          // Xóa tin nhắn hết hàng cũ của loại acc này nếu có
+          const oldMsgId = outOfStockMessages.get(productType);
+          if (oldMsgId) {
+            const oldMsg = await pingChannel.messages.fetch(oldMsgId).catch(() => null);
+            if (oldMsg) await oldMsg.delete().catch(() => {});
+          }
+          // Gửi tin nhắn mới và lưu ID
+          const newMsg = await pingChannel.send(`@everyone đã hết acc **${productName}**`).catch(() => null);
+          if (newMsg) outOfStockMessages.set(productType, newMsg.id);
+        }
+      }
+    }
+
     await updateMainMenu();
     setTimeout(() => {
       interaction.deleteReply().catch(() => {});
@@ -417,6 +466,13 @@ client.on('interactionCreate', async interaction => {
         const password = interaction.options.getString('password');
         await db.addClone(type, email, password);
         await interaction.editReply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!\n📧 ${email}\n🔑 ${password}` });
+
+        // --- GỬI PING THÔNG BÁO THÊM ACC MỚI ---
+        const pingChannel = await client.channels.fetch(PING_CHANNEL_ID).catch(() => null);
+        if (pingChannel) {
+          await pingChannel.send(`@everyone Đã thêm acc **${PRODUCT_NAMES[type]}**`).catch(() => {});
+        }
+
         await updateMainMenu();
       } catch (error) {
         console.error(error);
