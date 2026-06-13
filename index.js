@@ -160,7 +160,7 @@ async function updateMainMenu() {
         `Không có video sẽ không giải quyết khiếu nại!\n\n` +
         `**Hỗ trợ :** <@1481952195468460135>`
       )
-      .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
+      .setThumbnail('https://tenor.com/view/cat-tongue-cat-cats-ahh-excited-gif-11052788973622876130')
       .setFooter({ text: 'Hệ thống bán Acc tự động' });
     
     const rowButton = new ActionRowBuilder().addComponents(
@@ -354,7 +354,7 @@ client.on('interactionCreate', async interaction => {
           `Không có video sẽ không giải quyết khiếu nại!\n\n` +
           `**Hỗ trợ :** <@1481952195468460135>`
         )
-        .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
+        .setThumbnail('https://tenor.com/view/cat-tongue-cat-cats-ahh-excited-gif-11052788973622876130')
         .setFooter({ text: 'Hệ thống bán Acc tự động' });
       
       const selectMenu = new StringSelectMenuBuilder()
