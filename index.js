@@ -33,7 +33,7 @@ const PRODUCT_NAMES = {
   'kcvv': '💎 Clone KC Mail Vĩnh viễn',
   'kclogx': '🐦 Clone KC Log X'
 };
-const ADMIN_IDS = ['1507070505319006380']; // Thay ID admin của bạn
+const ADMIN_IDS = ['1481952195468460135']; // Thay ID admin của bạn
 
 const pendingPayments = new Map();
 let mainMenuMessageId = null;
@@ -158,7 +158,7 @@ async function updateMainMenu() {
         `Yêu cầu quay video khi mua và login luôn\n` +
         `ngay sau khi vừa mua để làm bằng chứng.\n` +
         `Không có video sẽ không giải quyết khiếu nại!\n\n` +
-        `**Hỗ trợ :** <@1507070505319006380>`
+        `**Hỗ trợ :** <@1481952195468460135>`
       )
       .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
       .setFooter({ text: 'Hệ thống bán Acc tự động' });
@@ -352,7 +352,7 @@ client.on('interactionCreate', async interaction => {
           `Yêu cầu quay video khi mua và login luôn\n` +
           `ngay sau khi vừa mua để làm bằng chứng.\n` +
           `Không có video sẽ không giải quyết khiếu nại!\n\n` +
-          `**Hỗ trợ :** <@1507070505319006380>`
+          `**Hỗ trợ :** <@1481952195468460135>`
         )
         .setThumbnail('https://cdn.discordapp.com/attachments/630397588092354561/922156242565214278/image0-3-3.gif')
         .setFooter({ text: 'Hệ thống bán Acc tự động' });
