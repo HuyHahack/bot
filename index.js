@@ -27,11 +27,11 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessages] 
 });
 
-// Giá sản phẩm (Không đổi giá của bạn)
-const PRICES = { 'lv5': 2000, 'kc7d': 25000, 'kcvv': 35000, 'kclogx': 35000 };
+// Giá sản phẩm (Đã cập nhật giá lv5 -> 2200)
+const PRICES = { 'lv5': 2200, 'kc7d': 25000, 'kcvv': 35000, 'kclogx': 35000 };
 const PRODUCT_NAMES = { 
-  'lv5': '🎮 Clone Level 5', 
-  'kc7d': '⚡ Clone KC Mail 7 ngày', 
+  'lv5': '🎮 Clone Level 8', 
+  'kc7d': '⚡ Clone KC Log Facebook', 
   'kcvv': '💎 Clone KC Mail Vĩnh viễn',
   'kclogx': '🐦 Clone KC Log X'
 };
@@ -110,8 +110,8 @@ const commands = [
         .setDescription('Loại clone')
         .setRequired(true)
         .addChoices(
-          { name: 'Level 5 (2,000đ)', value: 'lv5' },
-          { name: 'Rank KC 7 ngày (25,000đ)', value: 'kc7d' },
+          { name: 'Level 8 (2,200đ)', value: 'lv5' },
+          { name: 'Rank KC Log Facebook (25,000đ)', value: 'kc7d' },
           { name: 'Rank KC Vĩnh viễn (35,000đ)', value: 'kcvv' },
           { name: 'Rank KC Log X (35,000đ)', value: 'kclogx' }
         ))
@@ -173,8 +173,8 @@ async function updateMainMenu() {
       .setDescription(
         `💰 **Nạp tiền** để mua hàng\n` +
         `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
-        `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
-        `🟩 **Acc Clone KC Mail 7 ngày:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
+        `🟦 **Acc Clone LV8:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
+        `🟩 **Acc Clone KC Log Facebook:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
         `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n` +
         `🐦 **Acc Clone KC Log X:** \`${(PRICES.kclogx).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kclogx || 0}\`\n\n` +
         `⚠️ **Lưu ý quan trọng:**\n` +
@@ -196,12 +196,12 @@ async function updateMainMenu() {
       .setPlaceholder('🛒 | Chọn sản phẩm để mua')
       .addOptions([
         new StringSelectMenuOptionBuilder()
-          .setLabel('🎮 Clone Level 5')
+          .setLabel('🎮 Clone Level 8')
           .setDescription(`Giá: ${(PRICES.lv5).toLocaleString()}đ`)
           .setValue('lv5')
           .setEmoji('🎮'),
         new StringSelectMenuOptionBuilder()
-          .setLabel('⚡ Clone KC Mail 7 ngày')
+          .setLabel('⚡ Clone KC Log Facebook')
           .setDescription(`Giá: ${(PRICES.kc7d).toLocaleString()}đ`)
           .setValue('kc7d')
           .setEmoji('⚡'),
@@ -410,8 +410,8 @@ client.on('interactionCreate', async interaction => {
           .setDescription(
             `💰 **Nạp tiền** để mua hàng\n` +
             `📊 **Số dư** để kiểm tra số dư hiện tại\n\n` +
-            `🟦 **Acc Clone LV5:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
-            `🟩 **Acc Clone KC Mail 7 ngày:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
+            `🟦 **Acc Clone LV8:** \`${(PRICES.lv5).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.lv5 || 0}\`\n` +
+            `🟩 **Acc Clone KC Log Facebook:** \`${(PRICES.kc7d).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kc7d || 0}\`\n` +
             `🟪 **Acc Clone KC Mail Vĩnh viễn:** \`${(PRICES.kcvv).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kcvv || 0}\`\n` +
             `🐦 **Acc Clone KC Log X:** \`${(PRICES.kclogx).toLocaleString()} VND\` /acc | 📦 Kho: \`${stats.kclogx || 0}\`\n\n` +
             `⚠️ **Lưu ý quan trọng:**\n` +
@@ -428,12 +428,12 @@ client.on('interactionCreate', async interaction => {
           .setPlaceholder('🛒 | Chọn sản phẩm để mua')
           .addOptions([
             new StringSelectMenuOptionBuilder()
-              .setLabel('🎮 Clone Level 5')
+              .setLabel('🎮 Clone Level 8')
               .setDescription(`Giá: ${(PRICES.lv5).toLocaleString()}đ`)
               .setValue('lv5')
               .setEmoji('🎮'),
             new StringSelectMenuOptionBuilder()
-              .setLabel('⚡ Clone KC Mail 7 ngày')
+              .setLabel('⚡ Clone KC Log Facebook')
               .setDescription(`Giá: ${(PRICES.kc7d).toLocaleString()}đ`)
               .setValue('kc7d')
               .setEmoji('⚡'),
