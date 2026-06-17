@@ -28,7 +28,7 @@ const client = new Client({
 });
 
 // Giá sản phẩm (Đã cập nhật giá lv5 -> 2200)
-const PRICES = { 'lv5': 2200, 'kc7d': 25000, 'kcvv': 35000, 'kclogx': 35000 };
+const PRICES = { 'lv5': 2200, 'kc7d': 30000, 'kcvv': 30000, 'kclogx': 30000 };
 const PRODUCT_NAMES = { 
   'lv5': '🎮 Clone Level 8', 
   'kc7d': '⚡ Clone KC Log Facebook', 
@@ -111,9 +111,9 @@ const commands = [
         .setRequired(true)
         .addChoices(
           { name: 'Level 8 (2,200đ)', value: 'lv5' },
-          { name: 'Rank KC Log Facebook (25,000đ)', value: 'kc7d' },
-          { name: 'Rank KC Vĩnh viễn (35,000đ)', value: 'kcvv' },
-          { name: 'Rank KC Log X (35,000đ)', value: 'kclogx' }
+          { name: 'Rank KC Log Facebook (30,000đ)', value: 'kc7d' },
+          { name: 'Rank KC Vĩnh viễn (30,000đ)', value: 'kcvv' },
+          { name: 'Rank KC Log X (30,000đ)', value: 'kclogx' }
         ))
     .addStringOption(option => option.setName('email').setDescription('Email/Tài khoản').setRequired(true))
     .addStringOption(option => option.setName('password').setDescription('Mật khẩu').setRequired(true)),
