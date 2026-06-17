@@ -2,6 +2,7 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuild
 const axios = require('axios');
 const express = require('express');
 const crypto = require('crypto');
+const fs = require('fs'); // Quản lý tệp tin cấu hình Multi-Server [1.2.3]
 const db = require('./database');
 require('dotenv/config');
 
@@ -27,7 +28,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessages] 
 });
 
-// Giá sản phẩm (Đã cập nhật giá lv5 -> 2200)
+// Giá sản phẩm (Không đổi giá của bạn)
 const PRICES = { 'lv5': 2200, 'kc7d': 30000, 'kcvv': 30000, 'kclogx': 30000 };
 const PRODUCT_NAMES = { 
   'lv5': '🎮 Clone Level 8', 
@@ -37,15 +38,52 @@ const PRODUCT_NAMES = {
 };
 const ADMIN_IDS = ['1481952195468460135']; // ID admin của bạn
 
-// Cấu hình ID kênh hệ thống
-const PING_CHANNEL_ID = '1515052684342726857';
-const BILL_CHANNEL_ID = '1515318710032928778';
-
 const pendingPayments = new Map();
-let mainMenuMessageId = null;
-let mainMenuChannelId = null;
 
-// Bộ nhớ đệm quản lý ID tin nhắn thông báo (Key: loại acc, Value: ID tin nhắn)
+// CẤU HÌNH LƯU TRỮ BỀN VỮNG CHO BẢNG ĐIỀU KHIỂN CHÍNH (MULTI-SERVER)
+let menuConfigs = {}; // Khóa: guildId, Giá trị: { channelId, messageId }
+const CONFIG_PATH = './menu_configs.json';
+
+// Tự động khôi phục danh sách ID bảng điều khiển khi khởi chạy bot [1.2.3]
+try {
+  if (fs.existsSync(CONFIG_PATH)) {
+    menuConfigs = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    console.log('📂 Khôi phục cấu hình bảng điều khiển Multi-Server thành công:', menuConfigs);
+  }
+} catch (err) {
+  console.error('❌ Lỗi đọc tệp menu_configs.json:', err);
+}
+
+// Hàm ghi cấu hình xuống file lưu trữ theo Guild ID [1.2.3]
+function saveMenuConfig(guildId, channelId, messageId) {
+  if (channelId === null && messageId === null) {
+    delete menuConfigs[guildId];
+  } else {
+    menuConfigs[guildId] = { channelId, messageId };
+  }
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(menuConfigs, null, 2), 'utf8');
+  } catch (err) {
+    console.error('❌ Lỗi ghi tệp menu_configs.json:', err);
+  }
+}
+
+// Hàm tự động phát hiện cặp kênh Ping & Bill tương ứng với từng Server
+function getGuildChannels(guild) {
+  const channelPairs = [
+    { ping: '1515052684342726857', bill: '1515318710032928778' }, // Server 1
+    { ping: '1516832601950916838', bill: '1510985558850142419' }  // Server 2
+  ];
+
+  for (const pair of channelPairs) {
+    if (guild.channels.cache.has(pair.ping) || guild.channels.cache.has(pair.bill)) {
+      return pair;
+    }
+  }
+  return channelPairs[0]; // Trả về Server 1 mặc định nếu không khớp
+}
+
+// Bộ nhớ đệm quản lý ID tin nhắn thông báo (Key: guildId_loạiAcc, Value: ID tin nhắn)
 const inStockMessages = new Map();   // Lưu ID tin nhắn "Đã thêm"
 const outOfStockMessages = new Map(); // Lưu ID tin nhắn "Đã hết"
 
@@ -134,7 +172,6 @@ client.once('ready', async () => {
   console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
   
   try {
-    // Nếu có biến GUILD_ID trong Render, bot sẽ nạp lệnh ăn ngay lập tức cho server đó [4]
     if (process.env.GUILD_ID) {
       await rest.put(
         Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID.trim()),
@@ -142,7 +179,6 @@ client.once('ready', async () => {
       );
       console.log(`✅ Slash commands registered instantly for Guild: ${process.env.GUILD_ID}`);
     } else {
-      // Ngược lại nếu không có, bot sẽ nạp toàn cầu (chờ 1 tiếng)
       await rest.put(
         Routes.applicationCommands(client.user.id),
         { body: commands.map(cmd => cmd.toJSON()) }
@@ -153,21 +189,27 @@ client.once('ready', async () => {
     console.error('❌ Error registering commands:', error);
   }
   
+  // Tự động quét và cập nhật độc lập cho toàn bộ server đã cấu hình
   setInterval(async () => {
-    if (mainMenuChannelId && mainMenuMessageId) await updateMainMenu();
+    for (const guildId of Object.keys(menuConfigs)) {
+      await updateMainMenu(guildId);
+    }
   }, 30000);
 });
 
-async function updateMainMenu() {
-  if (!mainMenuChannelId || !mainMenuMessageId) return;
-  const channel = client.channels.cache.get(mainMenuChannelId);
+async function updateMainMenu(guildId) {
+  const config = menuConfigs[guildId];
+  if (!config || !config.channelId || !config.messageId) return;
+
+  const channel = await client.channels.fetch(config.channelId).catch(() => null);
   if (!channel) return;
+
   try {
-    const message = await channel.messages.fetch(mainMenuMessageId);
+    const message = await channel.messages.fetch(config.messageId);
     const stats = await db.getAllProductsByType();
     
     const embed = new EmbedBuilder()
-      .setColor(0xFF0000) // Viền đỏ giống ảnh minh họa
+      .setColor(0xFF0000)
       .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
       .setTitle('Chào mừng đến với Acc Clone Faifai')
       .setDescription(
@@ -220,7 +262,12 @@ async function updateMainMenu() {
     const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
     
     await message.edit({ embeds: [embed], components: [rowButton, rowSelect] });
-  } catch (error) { console.error('Update menu error:', error); }
+  } catch (error) { 
+    console.error(`Update menu error for guild ${guildId}:`, error);
+    if (error.code === 10008) { // Tin nhắn đã bị xóa
+      saveMenuConfig(guildId, null, null);
+    }
+  }
 }
 
 function createNapMenu() {
@@ -240,7 +287,6 @@ function createNapMenu() {
   return { components: [row1, row2, row3] };
 }
 
-// Hiển thị danh sách clone để xóa (Đã hỗ trợ Defer)
 async function showRemoveCloneMenu(interaction) {
   const clones = await db.getAllClones();
   const availableClones = clones.filter(c => c.status === 'available');
@@ -290,7 +336,10 @@ setInterval(async () => {
         await user.send({ embeds: [embed] }).catch(() => null);
       }
       pendingPayments.delete(orderCode);
-      await updateMainMenu();
+      
+      for (const guildId of Object.keys(menuConfigs)) {
+        await updateMainMenu(guildId);
+      }
     }
   }
 }, 15000);
@@ -340,44 +389,58 @@ async function handlePurchase(interaction, productType) {
     await user.send({ embeds: [embed] }).catch(() => null);
     await interaction.editReply({ content: `✅ Mua **${productName}** thành công! Đã gửi thông tin qua DM.` });
 
-    // --- GỬI HÓA ĐƠN ĐẾN KÊNH BILL ---
-    const billChannel = await client.channels.fetch(BILL_CHANNEL_ID).catch(() => null);
+    // --- GỬI HÓA ĐƠN ĐẾN KÊNH BILL (Tự nhận dạng theo Server) ---
+    const channels = getGuildChannels(interaction.guild);
+    const billChannel = await interaction.guild.channels.fetch(channels.bill).catch(() => null);
     if (billChannel) {
       const now = new Date();
       const vnTime = now.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
       await billChannel.send(`Cảm ơn <@${userId}> đã mua **${productName}** của chúng tôi! Chúc 1 ngày tốt lành! (Mua lúc: \`${vnTime}\`)`).catch(() => {});
     }
 
-    // --- KIỂM TRA HẾT HÀNG (Anti Out of Stock Ping - Ngoại trừ LV5) ---
+    // --- KIỂM TRA HẾT HÀNG (Anti Out of Stock Ping - Ngoại trừ LV8) ---
     if (productType !== 'lv5') {
       const stats = await db.getAllProductsByType().catch(() => ({}));
       const remaining = stats[productType] || 0;
       if (remaining === 0) {
-        const pingChannel = await client.channels.fetch(PING_CHANNEL_ID).catch(() => null);
-        if (pingChannel) {
-          // 1. Tìm và xóa chính xác tin nhắn báo "Đã thêm" tương ứng của loại acc này
-          const inStockMsgId = inStockMessages.get(productType);
-          if (inStockMsgId) {
-            const inStockMsg = await pingChannel.messages.fetch(inStockMsgId).catch(() => null);
-            if (inStockMsg) await inStockMsg.delete().catch(() => {});
-            inStockMessages.delete(productType);
-          }
+        // Đồng bộ xóa/gửi thông báo hết hàng cho tất cả máy chủ trong cấu hình
+        for (const targetGuildId of Object.keys(menuConfigs)) {
+          const targetGuild = await client.guilds.fetch(targetGuildId).catch(() => null);
+          if (targetGuild) {
+            const targetChannels = getGuildChannels(targetGuild);
+            const pingChannel = await targetGuild.channels.fetch(targetChannels.ping).catch(() => null);
+            if (pingChannel) {
+              const inKey = `${targetGuildId}_${productType}`;
+              const outKey = `${targetGuildId}_${productType}`;
 
-          // 2. Xóa tin nhắn hết hàng cũ của loại acc này nếu có (tránh bị spam nhiều tin hết hàng liên tiếp)
-          const oldMsgId = outOfStockMessages.get(productType);
-          if (oldMsgId) {
-            const oldMsg = await pingChannel.messages.fetch(oldMsgId).catch(() => null);
-            if (oldMsg) await oldMsg.delete().catch(() => {});
-          }
+              // 1. Tìm và xóa tin nhắn báo "Đã thêm" của server này
+              const inStockMsgId = inStockMessages.get(inKey);
+              if (inStockMsgId) {
+                const inStockMsg = await pingChannel.messages.fetch(inStockMsgId).catch(() => null);
+                if (inStockMsg) await inStockMsg.delete().catch(() => {});
+                inStockMessages.delete(inKey);
+              }
 
-          // 3. Gửi tin nhắn hết hàng mới và lưu ID
-          const newMsg = await pingChannel.send(`@everyone đã hết acc **${productName}**`).catch(() => null);
-          if (newMsg) outOfStockMessages.set(productType, newMsg.id);
+              // 2. Xóa tin nhắn hết hàng cũ nếu có
+              const oldMsgId = outOfStockMessages.get(outKey);
+              if (oldMsgId) {
+                const oldMsg = await pingChannel.messages.fetch(oldMsgId).catch(() => null);
+                if (oldMsg) await oldMsg.delete().catch(() => {});
+              }
+
+              // 3. Gửi tin nhắn báo hết hàng mới và lưu ID
+              const newMsg = await pingChannel.send(`@everyone đã hết acc **${productName}**`).catch(() => null);
+              if (newMsg) outOfStockMessages.set(outKey, newMsg.id);
+            }
+          }
         }
       }
     }
 
-    await updateMainMenu();
+    for (const guildId of Object.keys(menuConfigs)) {
+      await updateMainMenu(guildId);
+    }
+
     setTimeout(() => {
       interaction.deleteReply().catch(() => {});
     }, 5 * 60 * 1000);
@@ -391,20 +454,18 @@ async function handlePurchase(interaction, productType) {
 
 // ============ XỬ LÝ TƯƠNG TÁC ============
 client.on('interactionCreate', async interaction => {
-  // SLASH COMMANDS
   if (interaction.isCommand()) {
     if (interaction.commandName === 'start') {
       if (!ADMIN_IDS.includes(interaction.user.id)) {
         return interaction.reply({ content: '❌ Bạn không có quyền!', ephemeral: true });
       }
       
-      // Hoãn phản hồi (defer) để tránh lỗi timeout 3 giây [1]
       await interaction.deferReply({ ephemeral: false });
       
       try {
         const stats = await db.getAllProductsByType();
         const embed = new EmbedBuilder()
-          .setColor(0xFF0000) // Màu đỏ
+          .setColor(0xFF0000)
           .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
           .setTitle('Chào mừng đến với Acc Clone Faifai')
           .setDescription(
@@ -457,8 +518,7 @@ client.on('interactionCreate', async interaction => {
         const rowSelect = new ActionRowBuilder().addComponents(selectMenu);
         
         const message = await interaction.editReply({ embeds: [embed], components: [rowButton, rowSelect] });
-        mainMenuMessageId = message.id;
-        mainMenuChannelId = message.channel.id;
+        saveMenuConfig(interaction.guild.id, interaction.channel.id, message.id);
       } catch (error) {
         console.error('Lỗi khởi động start:', error);
         await interaction.editReply({ content: '❌ Đã có lỗi xảy ra khi tải dữ liệu!' });
@@ -477,25 +537,38 @@ client.on('interactionCreate', async interaction => {
         await db.addClone(type, email, password);
         await interaction.editReply({ content: `✅ Đã thêm ${PRODUCT_NAMES[type]}!\n📧 ${email}\n🔑 ${password}` });
 
-        // --- GỬI PING THÔNG BÁO THÊM ACC MỚI (Ngoại trừ LV5) ---
-        if (type !== 'lv5') {
-          const pingChannel = await client.channels.fetch(PING_CHANNEL_ID).catch(() => null);
-          if (pingChannel) {
-            // Xóa tin nhắn báo "Đã hết" trước đó của loại acc này (nếu có) để dọn dẹp kênh
-            const oldOutOfStockId = outOfStockMessages.get(type);
-            if (oldOutOfStockId) {
-              const oldMsg = await pingChannel.messages.fetch(oldOutOfStockId).catch(() => null);
-              if (oldMsg) await oldMsg.delete().catch(() => {});
-              outOfStockMessages.delete(type);
-            }
+        // --- GỬI PING THÔNG BÁO THÊM ACC MỚI CHO TẤT CẢ SERVER ĐÃ CẤU HÌNH ---
+        for (const guildId of Object.keys(menuConfigs)) {
+          const targetGuild = await client.guilds.fetch(guildId).catch(() => null);
+          if (targetGuild) {
+            const targetChannels = getGuildChannels(targetGuild);
+            const pingChannel = await targetGuild.channels.fetch(targetChannels.ping).catch(() => null);
+            if (pingChannel) {
+              const outKey = `${guildId}_${type}`;
+              const inKey = `${guildId}_${type}`;
 
-            // Gửi tin nhắn báo "Đã thêm" mới và lưu ID
-            const newMsg = await pingChannel.send(`@everyone Đã thêm acc **${PRODUCT_NAMES[type]}**`).catch(() => null);
-            if (newMsg) inStockMessages.set(type, newMsg.id);
+              // Xóa tin nhắn hết hàng cũ nếu có
+              const oldOutOfStockId = outOfStockMessages.get(outKey);
+              if (oldOutOfStockId) {
+                const oldMsg = await pingChannel.messages.fetch(oldOutOfStockId).catch(() => null);
+                if (oldMsg) await oldMsg.delete().catch(() => {});
+                outOfStockMessages.delete(outKey);
+              }
+
+              // Gửi tin nhắn mới và lưu ID
+              if (type !== 'lv5') {
+                const newMsg = await pingChannel.send(`@everyone Đã thêm acc **${PRODUCT_NAMES[type]}**`).catch(() => null);
+                if (newMsg) inStockMessages.set(inKey, newMsg.id);
+              } else {
+                await pingChannel.send(`@everyone Đã thêm acc **${PRODUCT_NAMES[type]}**`).catch(() => {});
+              }
+            }
           }
         }
 
-        await updateMainMenu();
+        for (const guildId of Object.keys(menuConfigs)) {
+          await updateMainMenu(guildId);
+        }
       } catch (error) {
         console.error(error);
         await interaction.editReply({ content: '❌ Không thể thêm tài khoản vào cơ sở dữ liệu.' });
@@ -517,7 +590,9 @@ client.on('interactionCreate', async interaction => {
           const removed = await db.removeCloneById(cloneId);
           if (removed) {
             await interaction.editReply({ content: `✅ Đã xóa clone ID \`${cloneId}\` (${removed.email}) khỏi kho!` });
-            await updateMainMenu();
+            for (const guildId of Object.keys(menuConfigs)) {
+              await updateMainMenu(guildId);
+            }
           } else {
             await interaction.editReply({ content: `❌ Không tìm thấy clone với ID \`${cloneId}\`!` });
           }
