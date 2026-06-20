@@ -72,7 +72,8 @@ function saveMenuConfig(guildId, channelId, messageId) {
 function getGuildChannels(guild) {
   const channelPairs = [
     { ping: '1515052684342726857', bill: '1515318710032928778' }, // Server 1
-    { ping: '1516832601950916838', bill: '1510985558850142419' }  // Server 2
+    { ping: '1516832601950916838', bill: '1510985558850142419' }, // Server 2
+    { ping: '1517767702297706658', bill: '1504817797904203796' }  // Server 3 (Mới thêm)
   ];
 
   for (const pair of channelPairs) {
@@ -209,7 +210,7 @@ async function updateMainMenu(guildId) {
     const stats = await db.getAllProductsByType();
     
     const embed = new EmbedBuilder()
-      .setColor(0xFF0000)
+      .setColor(0xFF0000) // Viền đỏ giống ảnh minh họa
       .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
       .setTitle('Chào mừng đến với Acc Clone Faifai')
       .setDescription(
@@ -287,6 +288,7 @@ function createNapMenu() {
   return { components: [row1, row2, row3] };
 }
 
+// Hiển thị danh sách clone để xóa (Đã hỗ trợ Defer)
 async function showRemoveCloneMenu(interaction) {
   const clones = await db.getAllClones();
   const availableClones = clones.filter(c => c.status === 'available');
@@ -336,10 +338,7 @@ setInterval(async () => {
         await user.send({ embeds: [embed] }).catch(() => null);
       }
       pendingPayments.delete(orderCode);
-      
-      for (const guildId of Object.keys(menuConfigs)) {
-        await updateMainMenu(guildId);
-      }
+      await updateMainMenu();
     }
   }
 }, 15000);
@@ -454,18 +453,20 @@ async function handlePurchase(interaction, productType) {
 
 // ============ XỬ LÝ TƯƠNG TÁC ============
 client.on('interactionCreate', async interaction => {
+  // SLASH COMMANDS
   if (interaction.isCommand()) {
     if (interaction.commandName === 'start') {
       if (!ADMIN_IDS.includes(interaction.user.id)) {
         return interaction.reply({ content: '❌ Bạn không có quyền!', ephemeral: true });
       }
       
+      // Hoãn phản hồi (defer) để tránh lỗi timeout 3 giây [1]
       await interaction.deferReply({ ephemeral: false });
       
       try {
         const stats = await db.getAllProductsByType();
         const embed = new EmbedBuilder()
-          .setColor(0xFF0000)
+          .setColor(0xFF0000) // Màu đỏ
           .setAuthor({ name: '🤖 Mua Acc Clone Free Fire Tự Động' })
           .setTitle('Chào mừng đến với Acc Clone Faifai')
           .setDescription(
@@ -547,12 +548,20 @@ client.on('interactionCreate', async interaction => {
               const outKey = `${guildId}_${type}`;
               const inKey = `${guildId}_${type}`;
 
-              // Xóa tin nhắn hết hàng cũ nếu có
+              // Xóa tin nhắn báo "Đã hết" trước đó của loại acc này (nếu có) để dọn dẹp kênh
               const oldOutOfStockId = outOfStockMessages.get(outKey);
               if (oldOutOfStockId) {
                 const oldMsg = await pingChannel.messages.fetch(oldOutOfStockId).catch(() => null);
                 if (oldMsg) await oldMsg.delete().catch(() => {});
                 outOfStockMessages.delete(outKey);
+              }
+
+              // Xóa tin nhắn báo "Đã thêm" cũ của loại acc này nếu có (khi thêm lần 2, 3, 4...)
+              const oldInStockId = inStockMessages.get(inKey);
+              if (oldInStockId) {
+                const oldInMsg = await pingChannel.messages.fetch(oldInStockId).catch(() => null);
+                if (oldInMsg) await oldInMsg.delete().catch(() => {});
+                inStockMessages.delete(inKey);
               }
 
               // Gửi tin nhắn mới và lưu ID
