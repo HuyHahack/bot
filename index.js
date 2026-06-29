@@ -73,7 +73,8 @@ function getGuildChannels(guild) {
   const channelPairs = [
     { ping: '1515052684342726857', bill: '1515318710032928778' }, // Server 1
     { ping: '1516832601950916838', bill: '1510985558850142419' }, // Server 2
-    { ping: '1517767702297706658', bill: '1504817797904203796' }  // Server 3 (Mới thêm)
+    { ping: '1516290426179424378', bill: '1496458200331845702' }, // Server 3 (Mới thêm)
+    { ping: '1516038987826073663', bill: '1503798452080083025' }  // Server 4 (Mới thêm)
   ];
 
   for (const pair of channelPairs) {
@@ -173,6 +174,7 @@ client.once('ready', async () => {
   console.log(`✅ Bot đã đăng nhập: ${client.user.tag}`);
   
   try {
+    // Nếu có biến GUILD_ID trong Render, bot sẽ nạp lệnh ăn ngay lập tức cho server đó [4]
     if (process.env.GUILD_ID) {
       await rest.put(
         Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID.trim()),
@@ -180,6 +182,7 @@ client.once('ready', async () => {
       );
       console.log(`✅ Slash commands registered instantly for Guild: ${process.env.GUILD_ID}`);
     } else {
+      // Ngược lại nếu không có, bot sẽ nạp toàn cầu (chờ 1 tiếng)
       await rest.put(
         Routes.applicationCommands(client.user.id),
         { body: commands.map(cmd => cmd.toJSON()) }
@@ -288,7 +291,6 @@ function createNapMenu() {
   return { components: [row1, row2, row3] };
 }
 
-// Hiển thị danh sách clone để xóa (Đã hỗ trợ Defer)
 async function showRemoveCloneMenu(interaction) {
   const clones = await db.getAllClones();
   const availableClones = clones.filter(c => c.status === 'available');
@@ -338,7 +340,10 @@ setInterval(async () => {
         await user.send({ embeds: [embed] }).catch(() => null);
       }
       pendingPayments.delete(orderCode);
-      await updateMainMenu();
+      
+      for (const guildId of Object.keys(menuConfigs)) {
+        await updateMainMenu(guildId);
+      }
     }
   }
 }, 15000);
